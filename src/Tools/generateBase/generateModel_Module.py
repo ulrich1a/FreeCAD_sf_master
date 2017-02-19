@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #
-# Generated Thu Jul 22 14:11:34 2010 by generateDS.py.
+# Generated Sat Dec 03 11:48:45 2016 by generateDS.py.
 #
 
 import sys
@@ -216,14 +216,16 @@ class GenerateModel:
 
 class PythonExport:
     subclass = None
-    def __init__(self, FatherNamespace='', RichCompare=0, Name='', Reference=0, FatherInclude='', Father='', Namespace='', Twin='', Constructor=0, TwinPointer='', Include='', NumberProtocol=0, Delete=0, Documentation=None, Methode=None, Attribute=None, Sequence=None, CustomAttributes='', ClassDeclarations=''):
+    def __init__(self, FatherNamespace='', RichCompare=0, Name='', Reference=0, FatherInclude='', Namespace='', Initialization=0, Father='', PythonName='', Twin='', Constructor=0, TwinPointer='', Include='', NumberProtocol=0, Delete=0, Documentation=None, Methode=None, Attribute=None, Sequence=None, CustomAttributes='', ClassDeclarations=''):
         self.FatherNamespace = FatherNamespace
         self.RichCompare = RichCompare
         self.Name = Name
         self.Reference = Reference
         self.FatherInclude = FatherInclude
-        self.Father = Father
         self.Namespace = Namespace
+        self.Initialization = Initialization
+        self.Father = Father
+        self.PythonName = PythonName
         self.Twin = Twin
         self.Constructor = Constructor
         self.TwinPointer = TwinPointer
@@ -274,10 +276,14 @@ class PythonExport:
     def setReference(self, Reference): self.Reference = Reference
     def getFatherinclude(self): return self.FatherInclude
     def setFatherinclude(self, FatherInclude): self.FatherInclude = FatherInclude
-    def getFather(self): return self.Father
-    def setFather(self, Father): self.Father = Father
     def getNamespace(self): return self.Namespace
     def setNamespace(self, Namespace): self.Namespace = Namespace
+    def getInitialization(self): return self.Initialization
+    def setInitialization(self, Initialization): self.Initialization = Initialization
+    def getFather(self): return self.Father
+    def setFather(self, Father): self.Father = Father
+    def getPythonname(self): return self.PythonName
+    def setPythonname(self, PythonName): self.PythonName = PythonName
     def getTwin(self): return self.Twin
     def setTwin(self, Twin): self.Twin = Twin
     def getConstructor(self): return self.Constructor
@@ -306,8 +312,12 @@ class PythonExport:
         if self.getReference() is not None:
             outfile.write(' Reference="%s"' % (self.getReference(), ))
         outfile.write(' FatherInclude="%s"' % (self.getFatherinclude(), ))
-        outfile.write(' Father="%s"' % (self.getFather(), ))
         outfile.write(' Namespace="%s"' % (self.getNamespace(), ))
+        if self.getInitialization() is not None:
+            outfile.write(' Initialization="%s"' % (self.getInitialization(), ))
+        outfile.write(' Father="%s"' % (self.getFather(), ))
+        if self.getPythonname() is not None:
+            outfile.write(' PythonName="%s"' % (self.getPythonname(), ))
         outfile.write(' Twin="%s"' % (self.getTwin(), ))
         if self.getConstructor() is not None:
             outfile.write(' Constructor="%s"' % (self.getConstructor(), ))
@@ -346,9 +356,13 @@ class PythonExport:
         showIndent(outfile, level)
         outfile.write('FatherInclude = "%s",\n' % (self.getFatherinclude(),))
         showIndent(outfile, level)
+        outfile.write('Namespace = "%s",\n' % (self.getNamespace(),))
+        showIndent(outfile, level)
+        outfile.write('Initialization = "%s",\n' % (self.getInitialization(),))
+        showIndent(outfile, level)
         outfile.write('Father = "%s",\n' % (self.getFather(),))
         showIndent(outfile, level)
-        outfile.write('Namespace = "%s",\n' % (self.getNamespace(),))
+        outfile.write('PythonName = "%s",\n' % (self.getPythonname(),))
         showIndent(outfile, level)
         outfile.write('Twin = "%s",\n' % (self.getTwin(),))
         showIndent(outfile, level)
@@ -429,10 +443,19 @@ class PythonExport:
                 raise ValueError('Bad boolean attribute (Reference)')
         if attrs.get('FatherInclude'):
             self.FatherInclude = attrs.get('FatherInclude').value
-        if attrs.get('Father'):
-            self.Father = attrs.get('Father').value
         if attrs.get('Namespace'):
             self.Namespace = attrs.get('Namespace').value
+        if attrs.get('Initialization'):
+            if attrs.get('Initialization').value in ('true', '1'):
+                self.Initialization = 1
+            elif attrs.get('Initialization').value in ('false', '0'):
+                self.Initialization = 0
+            else:
+                raise ValueError('Bad boolean attribute (Initialization)')
+        if attrs.get('Father'):
+            self.Father = attrs.get('Father').value
+        if attrs.get('PythonName'):
+            self.PythonName = attrs.get('PythonName').value
         if attrs.get('Twin'):
             self.Twin = attrs.get('Twin').value
         if attrs.get('Constructor'):
@@ -1810,12 +1833,23 @@ class SaxGeneratemodelHandler(handler.ContentHandler):
             val = attrs.get('FatherInclude', None)
             if val is not None:
                 obj.setFatherinclude(val)
-            val = attrs.get('Father', None)
-            if val is not None:
-                obj.setFather(val)
             val = attrs.get('Namespace', None)
             if val is not None:
                 obj.setNamespace(val)
+            val = attrs.get('Initialization', None)
+            if val is not None:
+                if val in ('true', '1'):
+                    obj.setInitialization(1)
+                elif val in ('false', '0'):
+                    obj.setInitialization(0)
+                else:
+                    self.reportError('"Initialization" attribute must be boolean ("true", "1", "false", "0")')
+            val = attrs.get('Father', None)
+            if val is not None:
+                obj.setFather(val)
+            val = attrs.get('PythonName', None)
+            if val is not None:
+                obj.setPythonname(val)
             val = attrs.get('Twin', None)
             if val is not None:
                 obj.setTwin(val)

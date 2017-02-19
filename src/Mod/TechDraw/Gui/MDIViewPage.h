@@ -29,6 +29,7 @@
 
 #include <QPrinter>
 #include <QGraphicsScene>
+#include <QPointF>
 
 QT_BEGIN_NAMESPACE
 class QAction;
@@ -36,6 +37,7 @@ QT_END_NAMESPACE
 
 namespace TechDraw {
 class DrawTemplate;
+class DrawView;
 }
 
 namespace TechDrawGui
@@ -63,7 +65,7 @@ public:
     void attachTemplate(TechDraw::DrawTemplate *obj);
     void updateTemplate(bool force = false);
     void updateDrawing(bool force = false);
-
+    
     bool onMsg(const char* pMsg,const char** ppReturn);
     bool onHasMsg(const char* pMsg) const;
     void onRelabel(Gui::Document *pDoc);
@@ -82,6 +84,13 @@ public:
 
     QGraphicsScene* m_scene;
 
+    QPointF getTemplateCenter(TechDraw::DrawTemplate *obj);
+    void centerOnPage(void);
+
+    void redrawAllViews(void);
+    void redraw1View(TechDraw::DrawView* dv);
+
+
 public Q_SLOTS:
     void setRenderer(QAction *action);
     void viewAll();
@@ -92,12 +101,20 @@ protected:
     void findMissingViews( const std::vector<App::DocumentObject*> &list, std::vector<App::DocumentObject*> &missing);
     bool hasQView(App::DocumentObject *obj);
     bool orphanExists(const char *viewName, const std::vector<App::DocumentObject*> &list);
-    int attachView(App::DocumentObject *obj);
+
+    /// Attaches view of obj to m_view.  Returns true on success, false otherwise
+    bool attachView(App::DocumentObject *obj);
+
     void contextMenuEvent(QContextMenuEvent *event);
     void closeEvent(QCloseEvent*);
     QPrinter::PaperSize getPaperSize(int w, int h) const;
     void setDimensionGroups(void);
     void showStatusMsg(const char* s1, const char* s2, const char* s3) const;
+    
+    void onDeleteObject(const App::DocumentObject& obj);
+
+    typedef boost::BOOST_SIGNALS_NAMESPACE::connection Connection;
+    Connection connectDeletedObject;
 
 private:
     QAction *m_nativeAction;
@@ -113,7 +130,7 @@ private:
     QString m_currentPath;
     QPrinter::Orientation m_orientation;
     QPrinter::PaperSize m_paperSize;
-    ViewProviderPage *pageGui;
+    ViewProviderPage *m_vpPage;
 
     bool m_frameState;
 

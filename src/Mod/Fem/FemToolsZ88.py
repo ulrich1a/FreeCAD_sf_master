@@ -19,12 +19,14 @@
 # *   USA                                                                   *
 # *                                                                         *
 # ***************************************************************************
-
+from __future__ import print_function
 
 __title__ = "FemToolsZ88"
 __author__ = "Bernd Hahnebach"
 __url__ = "http://www.freecadweb.org"
 
+## \addtogroup FEM
+#  @{
 
 import FreeCAD
 import FemTools
@@ -82,9 +84,9 @@ class FemToolsZ88(FemTools.FemTools):
         try:
             inp_writer = iw.FemInputWriterZ88(
                 self.analysis, self.solver,
-                self.mesh, self.materials,
+                self.mesh, self.materials_linear, self.materials_nonlinear,
                 self.fixed_constraints, self.displacement_constraints,
-                self.contact_constraints, self.planerotation_constraints,
+                self.contact_constraints, self.planerotation_constraints, self.transform_constraints,
                 self.selfweight_constraints, self.force_constraints, self.pressure_constraints,
                 self.temperature_constraints, self.heatflux_constraints, self.initialtemperature_constraints,
                 self.beam_sections, self.shell_thicknesses,
@@ -99,17 +101,24 @@ class FemToolsZ88(FemTools.FemTools):
     #  @z88_binary path to z88r binary, default is guessed: "bin/z88r" windows, "z88r" for other systems
     def setup_z88(self, z88_binary=None):
         from platform import system
-        if not z88_binary:
-            self.fem_prefs = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem")
-            z88_binary = self.fem_prefs.GetString("z88BinaryPath", "")
-        if not z88_binary:
-            if system() == "Linux":
-                z88_binary = "z88r"
-            elif system() == "Windows":
-                z88_binary = FreeCAD.getHomePath() + "bin/z88r.exe"
-            else:
-                z88_binary = "z88r"
-        self.z88_binary = z88_binary
+        z88_std_location = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem/Z88").GetBool("UseStandardZ88Location")
+        print(z88_std_location)
+        if z88_std_location:
+            if system() == "Windows":
+                z88_path = FreeCAD.getHomePath() + "bin/z88r.exe"
+                FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem/Z88").SetString("z88BinaryPath", z88_path)
+                self.z88_binary = z88_path
+        else:
+            if not z88_binary:
+                z88_binary = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem/Z88").GetString("z88BinaryPath", "")
+            if not z88_binary:
+                if system() == "Linux":
+                    z88_binary = "z88r"
+                elif system() == "Windows":
+                    z88_binary = FreeCAD.getHomePath() + "bin/z88r.exe"
+                else:
+                    z88_binary = "z88r"
+            self.z88_binary = z88_binary
 
     def run(self):
         # TODO: reimplement the process handling for z88 binary
@@ -182,13 +191,15 @@ class FemToolsZ88(FemTools.FemTools):
 
     def load_results_o2(self):
         import os
-        import z88DispReader
+        import importZ88O2Results
         disp_result_file = self.working_dir + '/z88o2.txt'
         if os.path.isfile(disp_result_file):
             result_name_prefix = 'Z88_' + self.solver.AnalysisType + '_'
-            z88DispReader.import_z88_disp(disp_result_file, self.analysis, result_name_prefix)
+            importZ88O2Results.import_z88_disp(disp_result_file, self.analysis, result_name_prefix)
             for m in self.analysis.Member:
                 if m.isDerivedFrom("Fem::FemResultObject"):
                     self.results_present = True
         else:
             raise Exception('FEM: No results found at {}!'.format(disp_result_file))
+
+#  @}

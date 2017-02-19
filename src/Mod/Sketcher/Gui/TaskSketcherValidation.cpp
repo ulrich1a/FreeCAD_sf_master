@@ -186,7 +186,7 @@ void SketcherValidation::on_findButton_clicked()
     for (std::size_t i=0; i<geom.size(); i++) {
         Part::Geometry* g = geom[i];
         if (g->getTypeId() == Part::GeomLineSegment::getClassTypeId()) {
-            const Part::GeomLineSegment *segm = dynamic_cast<const Part::GeomLineSegment*>(g);
+            const Part::GeomLineSegment *segm = static_cast<const Part::GeomLineSegment*>(g);
             VertexIds id;
             id.GeoId = (int)i;
             id.PosId = Sketcher::start;
@@ -198,7 +198,7 @@ void SketcherValidation::on_findButton_clicked()
             vertexIds.push_back(id);
         }
         else if (g->getTypeId() == Part::GeomArcOfCircle::getClassTypeId()) {
-            const Part::GeomArcOfCircle *segm = dynamic_cast<const Part::GeomArcOfCircle*>(g);
+            const Part::GeomArcOfCircle *segm = static_cast<const Part::GeomArcOfCircle*>(g);
             VertexIds id;
             id.GeoId = (int)i;
             id.PosId = Sketcher::start;
@@ -210,7 +210,7 @@ void SketcherValidation::on_findButton_clicked()
             vertexIds.push_back(id);
         }
         else if (g->getTypeId() == Part::GeomArcOfEllipse::getClassTypeId()) {
-            const Part::GeomArcOfEllipse *segm = dynamic_cast<const Part::GeomArcOfEllipse*>(g);
+            const Part::GeomArcOfEllipse *segm = static_cast<const Part::GeomArcOfEllipse*>(g);
             VertexIds id;
             id.GeoId = (int)i;
             id.PosId = Sketcher::start;
@@ -219,6 +219,42 @@ void SketcherValidation::on_findButton_clicked()
             id.GeoId = (int)i;
             id.PosId = Sketcher::end;
             id.v = segm->getEndPoint(/*emulateCCW=*/true);
+            vertexIds.push_back(id);
+        }
+        else if (g->getTypeId() == Part::GeomArcOfHyperbola::getClassTypeId()) {
+            const Part::GeomArcOfHyperbola *segm = static_cast<const Part::GeomArcOfHyperbola*>(g);
+            VertexIds id;
+            id.GeoId = (int)i;
+            id.PosId = Sketcher::start;
+            id.v = segm->getStartPoint();
+            vertexIds.push_back(id);
+            id.GeoId = (int)i;
+            id.PosId = Sketcher::end;
+            id.v = segm->getEndPoint();
+            vertexIds.push_back(id);
+        }
+        else if (g->getTypeId() == Part::GeomArcOfParabola::getClassTypeId()) {
+            const Part::GeomArcOfParabola *segm = dynamic_cast<const Part::GeomArcOfParabola*>(g);
+            VertexIds id;
+            id.GeoId = (int)i;
+            id.PosId = Sketcher::start;
+            id.v = segm->getStartPoint();
+            vertexIds.push_back(id);
+            id.GeoId = (int)i;
+            id.PosId = Sketcher::end;
+            id.v = segm->getEndPoint();
+            vertexIds.push_back(id);
+        }
+        else if (g->getTypeId() == Part::GeomBSplineCurve::getClassTypeId()) {
+            const Part::GeomBSplineCurve *segm = static_cast<const Part::GeomBSplineCurve*>(g);
+            VertexIds id;
+            id.GeoId = (int)i;
+            id.PosId = Sketcher::start;
+            id.v = segm->getStartPoint();
+            vertexIds.push_back(id);
+            id.GeoId = (int)i;
+            id.PosId = Sketcher::end;
+            id.v = segm->getEndPoint();
             vertexIds.push_back(id);
         }
     }
@@ -375,8 +411,8 @@ void SketcherValidation::on_findReversed_clicked()
         Part::Geometry* g = geom[i];
         //only arcs of circles need to be repaired. Arcs of ellipse were so broken there should be nothing to repair from.
         if (g->getTypeId() == Part::GeomArcOfCircle::getClassTypeId()) {
-            const Part::GeomArcOfCircle *segm = dynamic_cast<const Part::GeomArcOfCircle*>(g);
-            if(segm->isReversedInXY()){
+            const Part::GeomArcOfCircle *segm = static_cast<const Part::GeomArcOfCircle*>(g);
+            if (segm->isReversed()) {
                 points.push_back(segm->getStartPoint(/*emulateCCW=*/true));
                 points.push_back(segm->getEndPoint(/*emulateCCW=*/true));
             }

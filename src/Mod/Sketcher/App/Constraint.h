@@ -63,7 +63,12 @@ enum InternalAlignmentType {
     EllipseMajorDiameter    = 1,
     EllipseMinorDiameter    = 2,
     EllipseFocus1           = 3,
-    EllipseFocus2           = 4
+    EllipseFocus2           = 4,
+    HyperbolaMajor          = 5,
+    HyperbolaMinor          = 6,
+    HyperbolaFocus          = 7,
+    ParabolaFocus           = 8,
+    BSplineControlPoint     = 9 // in this constraint "Third" is used to indicate the index of the control point (0-poles), it is not a GeoId
 };
 
 /// define if you want to use the end or start point
@@ -111,6 +116,7 @@ public:
     float LabelDistance;
     float LabelPosition;
     bool isDriving;
+    int InternalAlignmentIndex; // Note: for InternalAlignment Type this index indexes equal internal geometry elements (e.g. index of pole in a bspline). It is not a GeoId!! 
 
 protected:
     boost::uuids::uuid tag;

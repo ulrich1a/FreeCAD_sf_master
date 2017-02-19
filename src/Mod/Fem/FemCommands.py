@@ -25,8 +25,10 @@ __title__ = "Fem Commands"
 __author__ = "Przemo Firszt"
 __url__ = "http://www.freecadweb.org"
 
-import FreeCAD
+## \addtogroup FEM
+#  @{
 
+import FreeCAD
 if FreeCAD.GuiUp:
     import FreeCADGui
     import FemGui
@@ -54,8 +56,18 @@ class FemCommands(object):
                 active = FemGui.getActiveAnalysis() is not None and self.active_analysis_in_active_doc()
             elif self.is_active == 'with_results':
                 active = FemGui.getActiveAnalysis() is not None and self.active_analysis_in_active_doc() and self.results_present()
+            elif self.is_active == 'with_selresult':
+                active = FemGui.getActiveAnalysis() is not None and self.active_analysis_in_active_doc() and self.result_selected()
             elif self.is_active == 'with_part_feature':
                 active = FreeCADGui.ActiveDocument is not None and self.part_feature_selected()
+            elif self.is_active == 'with_femmesh':
+                active = FreeCADGui.ActiveDocument is not None and self.femmesh_selected()
+            elif self.is_active == 'with_gmsh_femmesh':
+                active = FreeCADGui.ActiveDocument is not None and self.gmsh_femmesh_selected()
+            elif self.is_active == 'with_femmesh_andor_res':
+                active = FreeCADGui.ActiveDocument is not None and self.with_femmesh_andor_res_selected()
+            elif self.is_active == 'with_material':
+                active = FemGui.getActiveAnalysis() is not None and self.active_analysis_in_active_doc() and self.material_selected()
             elif self.is_active == 'with_solver':
                 active = FemGui.getActiveAnalysis() is not None and self.active_analysis_in_active_doc() and self.solver_selected()
             elif self.is_active == 'with_analysis_without_solver':
@@ -70,10 +82,64 @@ class FemCommands(object):
                     results = True
             return results
 
+        def result_selected(self):
+            result_is_in_active_analysis = False
+            sel = FreeCADGui.Selection.getSelection()
+            if len(sel) == 1 and sel[0].isDerivedFrom("Fem::FemResultObject"):
+                for o in FemGui.getActiveAnalysis().Member:
+                    if o == sel[0]:
+                        result_is_in_active_analysis = True
+                        break
+            if result_is_in_active_analysis:
+                return True
+            else:
+                return False
+
         def part_feature_selected(self):
             sel = FreeCADGui.Selection.getSelection()
             if len(sel) == 1 and sel[0].isDerivedFrom("Part::Feature"):
                 return True
+            else:
+                return False
+
+        def femmesh_selected(self):
+            sel = FreeCADGui.Selection.getSelection()
+            if len(sel) == 1 and sel[0].isDerivedFrom("Fem::FemMeshObject"):
+                return True
+            else:
+                return False
+
+        def gmsh_femmesh_selected(self):
+            sel = FreeCADGui.Selection.getSelection()
+            if len(sel) == 1 and hasattr(sel[0], "Proxy") and sel[0].Proxy.Type == "FemMeshGmsh":
+                return True
+            else:
+                return False
+
+        def material_selected(self):
+            sel = FreeCADGui.Selection.getSelection()
+            if len(sel) == 1 and sel[0].isDerivedFrom("App::MaterialObjectPython"):
+                return True
+            else:
+                return False
+
+        def with_femmesh_andor_res_selected(self):
+            sel = FreeCADGui.Selection.getSelection()
+            if len(sel) == 1 and sel[0].isDerivedFrom("Fem::FemMeshObject"):
+                return True
+            elif len(sel) == 2:
+                if(sel[0].isDerivedFrom("Fem::FemMeshObject")):
+                    if(sel[1].isDerivedFrom("Fem::FemResultObject")):
+                        return True
+                    else:
+                        return False
+                elif(sel[1].isDerivedFrom("Fem::FemMeshObject")):
+                    if(sel[0].isDerivedFrom("Fem::FemResultObject")):
+                        return True
+                    else:
+                        return False
+                else:
+                    return False
             else:
                 return False
 
@@ -98,23 +164,6 @@ class FemCommands(object):
             else:
                 return False
 
-        def hide_parts_constraints_show_meshes(self):
-            if FreeCAD.GuiUp:
-                for acnstrmesh in FemGui.getActiveAnalysis().Member:
-                    # if "Constraint" in acnstrmesh.TypeId:
-                    #     acnstrmesh.ViewObject.Visibility = False
-                    fem_prefs = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem")
-                    hide_constraints = fem_prefs.GetBool("HideConstraint", False)
-                    if hide_constraints:
-                        if "Constraint" in acnstrmesh.TypeId:
-                            acnstrmesh.ViewObject.Visibility = False
-                    if "Mesh" in acnstrmesh.TypeId:
-                        aparttoshow = acnstrmesh.Name.replace("_Mesh", "")
-                        for apart in FreeCAD.activeDocument().Objects:
-                            if aparttoshow == apart.Name:
-                                apart.ViewObject.Visibility = False
-                        acnstrmesh.ViewObject.Visibility = True  # OvG: Hide constraints and parts and show meshes
-
         def hide_meshes_show_parts_constraints(self):
             if FreeCAD.GuiUp:
                 for acnstrmesh in FemGui.getActiveAnalysis().Member:
@@ -126,3 +175,5 @@ class FemCommands(object):
                             if aparttoshow == apart.Name:
                                 apart.ViewObject.Visibility = True
                         acnstrmesh.ViewObject.Visibility = False  # OvG: Hide meshes and show constraints and meshed part e.g. on purging results
+
+#  @}

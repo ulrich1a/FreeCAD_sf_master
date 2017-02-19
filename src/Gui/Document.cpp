@@ -24,10 +24,12 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+# include <QAbstractButton>
 # include <qapplication.h>
 # include <qdir.h>
 # include <qfileinfo.h>
 # include <QGLWidget>
+# include <QKeySequence>
 # include <qmessagebox.h>
 # include <qstatusbar.h>
 # include <boost/signals.hpp>
@@ -41,6 +43,7 @@
 #include <Base/Matrix.h>
 #include <Base/Reader.h>
 #include <Base/Writer.h>
+#include <Base/Tools.h>
 
 #include <App/Document.h>
 #include <App/DocumentObject.h>
@@ -59,6 +62,7 @@
 #include "View3DInventorViewer.h"
 #include "BitmapFactory.h"
 #include "ViewProviderDocumentObject.h"
+#include "ViewProviderDocumentObjectGroup.h"
 #include "Selection.h"
 #include "WaitCursor.h"
 #include "Thumbnail.h"
@@ -219,8 +223,13 @@ bool Document::setEdit(Gui::ViewProvider* p, int ModNum)
 {
     if (d->_editViewProvider)
         resetEdit();
+
     // is it really a ViewProvider of this document?
-    if (d->_ViewProviderMap.find(dynamic_cast<ViewProviderDocumentObject*>(p)->getObject()) == d->_ViewProviderMap.end())
+    ViewProviderDocumentObject* vp = dynamic_cast<ViewProviderDocumentObject*>(p);
+    if (!vp)
+        return false;
+
+    if (d->_ViewProviderMap.find(vp->getObject()) == d->_ViewProviderMap.end())
         return false;
 
     View3DInventor *activeView = dynamic_cast<View3DInventor *>(getActiveView());
@@ -663,8 +672,9 @@ bool Document::saveAs(void)
         // save as new file name
         try {
             Gui::WaitCursor wc;
-            Command::doCommand(Command::Doc,"App.getDocument(\"%s\").saveAs(\"%s\")"
-                                           , DocName, (const char*)fn.toUtf8());
+            std::string escapedstr = Base::Tools::escapedUnicodeFromUtf8(fn.toUtf8());
+            Command::doCommand(Command::Doc,"App.getDocument(\"%s\").saveAs(u\"%s\")"
+                                           , DocName, escapedstr.c_str());
             setModified(false);
             getMainWindow()->appendRecentFile(fi.filePath());
         }
@@ -888,8 +898,11 @@ void Document::SaveDocFile (Base::Writer &writer) const
         ViewProvider* obj = it->second;
         writer.Stream() << writer.ind() << "<ViewProvider name=\""
                         << doc->getNameInDocument() << "\" "
-                        << "expanded=\"" << (doc->testStatus(App::Expand) ? 1:0)
-                        << "\">" << std::endl;
+                        << "expanded=\"" << (doc->testStatus(App::Expand) ? 1:0) << "\"";
+        if(obj->hasExtensions())
+            writer.Stream() << " Extensions=\"True\"";
+        
+        writer.Stream() << ">" << std::endl;
         obj->Save(writer);
         writer.Stream() << writer.ind() << "</ViewProvider>" << std::endl;
     }
@@ -1044,7 +1057,7 @@ void Document::createView(const Base::Type& typeId)
         View3DInventor* firstView = 0;
         QGLWidget* shareWidget = 0;
         if (!theViews.empty()) {
-            firstView = dynamic_cast<View3DInventor*>(theViews.front());
+            firstView = static_cast<View3DInventor*>(theViews.front());
             shareWidget = qobject_cast<QGLWidget*>(firstView->getViewer()->getGLWidget());
         }
 
@@ -1198,6 +1211,22 @@ bool Document::canClose ()
         box.setInformativeText(QObject::tr("If you don't save, your changes will be lost."));
         box.setStandardButtons(QMessageBox::Discard | QMessageBox::Cancel | QMessageBox::Save);
         box.setDefaultButton(QMessageBox::Save);
+        box.setEscapeButton(QMessageBox::Cancel);
+
+        // add shortcuts
+        QAbstractButton* saveBtn = box.button(QMessageBox::Save);
+        if (saveBtn->shortcut().isEmpty()) {
+            QString text = saveBtn->text();
+            text.prepend(QLatin1Char('&'));
+            saveBtn->setShortcut(QKeySequence::mnemonic(text));
+        }
+
+        QAbstractButton* discardBtn = box.button(QMessageBox::Discard);
+        if (discardBtn->shortcut().isEmpty()) {
+            QString text = discardBtn->text();
+            text.prepend(QLatin1Char('&'));
+            discardBtn->setShortcut(QKeySequence::mnemonic(text));
+        }
 
         switch (box.exec())
         {
@@ -1321,21 +1350,21 @@ MDIView* Document::getActiveView(void) const
     return active;
 }
 
-Gui::MDIView* Document::getViewOfViewProvider(Gui::ViewProvider* vp) const
+Gui::MDIView* Document::getViewOfNode(SoNode* node) const
 {
     std::list<MDIView*> mdis = getMDIViewsOfType(View3DInventor::getClassTypeId());
     for (std::list<MDIView*>::const_iterator it = mdis.begin(); it != mdis.end(); ++it) {
         View3DInventor* view = static_cast<View3DInventor*>(*it);
-        SoSearchAction searchAction;
-        searchAction.setNode(vp->getRoot());
-        searchAction.setInterest(SoSearchAction::FIRST);
-        searchAction.apply(view->getViewer()->getSceneGraph());
-        SoPath* selectionPath = searchAction.getPath();
-        if (selectionPath)
+        if (view->getViewer()->searchNode(node))
             return *it;
     }
 
     return 0;
+}
+
+Gui::MDIView* Document::getViewOfViewProvider(Gui::ViewProvider* vp) const
+{
+    return getViewOfNode(vp->getRoot());
 }
 
 Gui::MDIView* Document::getEditingViewOfViewProvider(Gui::ViewProvider* vp) const
@@ -1420,25 +1449,25 @@ PyObject* Document::getPyObject(void)
 void Document::handleChildren3D(ViewProvider* viewProvider)
 {
     // check for children
-    if (viewProvider->getChildRoot()) {
+    if (viewProvider && viewProvider->getChildRoot()) {
         std::vector<App::DocumentObject*> children = viewProvider->claimChildren3D();
         SoGroup* childGroup =  viewProvider->getChildRoot();
 
         // size not the same -> build up the list new
-        if(childGroup->getNumChildren() != static_cast<int>(children.size())){
+        if (childGroup->getNumChildren() != static_cast<int>(children.size())) {
 
             childGroup->removeAllChildren();
 
-            for(std::vector<App::DocumentObject*>::iterator it=children.begin();it!=children.end();++it){
+            for (std::vector<App::DocumentObject*>::iterator it=children.begin();it!=children.end();++it) {
                 ViewProvider* ChildViewProvider = getViewProvider(*it);
-                if(ChildViewProvider) {
+                if (ChildViewProvider) {
                     SoSeparator* childRootNode =  ChildViewProvider->getRoot();
                     childGroup->addChild(childRootNode);
 
                     // cycling to all views of the document to remove the viewprovider from the viewer itself
                     for (std::list<Gui::BaseView*>::iterator vIt = d->baseViews.begin();vIt != d->baseViews.end();++vIt) {
                         View3DInventor *activeView = dynamic_cast<View3DInventor *>(*vIt);
-                        if (activeView && viewProvider && activeView->getViewer()->hasViewProvider(ChildViewProvider)) {
+                        if (activeView && activeView->getViewer()->hasViewProvider(ChildViewProvider)) {
                             // Note about hasViewProvider()
                             //remove the viewprovider serves the purpose of detaching the inventor nodes from the
                             //top level root in the viewer. However, if some of the children were grouped beneath the object
@@ -1446,6 +1475,23 @@ void Document::handleChildren3D(ViewProvider* viewProvider)
                             if (d->_editViewProvider == ChildViewProvider)
                                 resetEdit();
                             activeView->getViewer()->removeViewProvider(ChildViewProvider);
+                        }
+                    }
+                }
+            }
+        }
+    } else if (viewProvider && viewProvider->isDerivedFrom(ViewProviderDocumentObjectGroup::getClassTypeId())) {
+
+        if (viewProvider->hasExtension(ViewProviderDocumentObjectGroup::getExtensionClassTypeId())) {
+            std::vector<App::DocumentObject*> children = viewProvider->claimChildren();
+
+            for (auto& child : children) {
+                ViewProvider* ChildViewProvider = getViewProvider(child);
+                if (ChildViewProvider) {
+                    for (BaseView* view : d->baseViews) {
+                        View3DInventor *activeView = dynamic_cast<View3DInventor *>(view);
+                        if (activeView && !activeView->getViewer()->hasViewProvider(ChildViewProvider)) {
+                            activeView->getViewer()->addViewProvider(ChildViewProvider);
                         }
                     }
                 }

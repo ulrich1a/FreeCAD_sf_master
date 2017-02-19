@@ -34,7 +34,6 @@
 #include "../App/Sheet.h"
 #include <Gui/Command.h>
 #include <Base/Tools.h>
-#include <strstream>
 #include <boost/bind.hpp>
 
 using namespace SpreadsheetGui;
@@ -49,6 +48,9 @@ SheetModel::SheetModel(Sheet *_sheet, QObject *parent)
 
     ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Mod/Spreadsheet");
     aliasBgColor = QColor(Base::Tools::fromStdString(hGrp->GetASCII("AliasedCellBackgroundColor", "#feff9e")));
+    textFgColor = QColor(Base::Tools::fromStdString(hGrp->GetASCII("TextColor", "#000000")));
+    positiveFgColor = QColor(Base::Tools::fromStdString(hGrp->GetASCII("PositiveNumberColor", "#000000")));
+    negativeFgColor = QColor(Base::Tools::fromStdString(hGrp->GetASCII("NegativeNumberColor", "#000000")));
 }
 
 SheetModel::~SheetModel()
@@ -58,11 +60,13 @@ SheetModel::~SheetModel()
 
 int SheetModel::rowCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent);
     return 16384;
 }
 
 int SheetModel::columnCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent);
     return 26 * 26 + 26;
 }
 
@@ -212,15 +216,9 @@ QVariant SheetModel::data(const QModelIndex &index, int role) const
     if (prop == 0)
         return QVariant();
 
-    Color color;
-    if (role == Qt::TextColorRole || role == Qt::ForegroundRole) {
-        if (cell->getForeground(color))
-            return QVariant::fromValue(QColor(255.0 * color.r, 255.0 * color.g, 255.0 * color.b, 255.0 * color.a));
-        else
-            return QVariant();
-    }
-
     if (role == Qt::BackgroundRole) {
+        Color color;
+
         if (cell->getBackground(color))
             return QVariant::fromValue(QColor(255.0 * color.r, 255.0 * color.g, 255.0 * color.b, 255.0 * color.a));
         else {
@@ -272,8 +270,14 @@ QVariant SheetModel::data(const QModelIndex &index, int role) const
         const App::PropertyString * stringProp = static_cast<const App::PropertyString*>(prop);
 
         switch (role) {
-        case Qt::TextColorRole:
-            return QVariant::fromValue(QColor(Qt::black));
+        case Qt::TextColorRole: {
+            Color color;
+
+            if (cell->getForeground(color))
+                return QVariant::fromValue(QColor(255.0 * color.r, 255.0 * color.g, 255.0 * color.b, 255.0 * color.a));
+            else
+                return QVariant(QColor(textFgColor));
+        }
         case Qt::DisplayRole:
             return QVariant(QString::fromUtf8(stringProp->getValue()));
         case Qt::TextAlignmentRole: {
@@ -296,11 +300,18 @@ QVariant SheetModel::data(const QModelIndex &index, int role) const
         const App::PropertyQuantity * floatProp = static_cast<const App::PropertyQuantity*>(prop);
 
         switch (role) {
-        case  Qt::TextColorRole:
-            if (floatProp->getValue() < 0)
-                return QVariant::fromValue(QColor(Qt::red));
-            else
-                return QVariant::fromValue(QColor(Qt::blue));
+        case  Qt::TextColorRole: {
+            Color color;
+
+            if (cell->getForeground(color))
+                return QVariant::fromValue(QColor(255.0 * color.r, 255.0 * color.g, 255.0 * color.b, 255.0 * color.a));
+            else {
+                if (floatProp->getValue() < 0)
+                    return QVariant::fromValue(QColor(negativeFgColor));
+                else
+                    return QVariant::fromValue(QColor(positiveFgColor));
+            }
+        }
         case Qt::TextAlignmentRole: {
             if (alignment & Cell::ALIGNMENT_HIMPLIED) {
                 qtAlignment &= ~(Qt::AlignLeft | Qt::AlignHCenter | Qt::AlignRight);
@@ -341,11 +352,18 @@ QVariant SheetModel::data(const QModelIndex &index, int role) const
         const App::PropertyFloat * floatProp = static_cast<const App::PropertyFloat*>(prop);
 
         switch (role) {
-        case  Qt::TextColorRole:
-            if (floatProp->getValue() < 0)
-                return QVariant::fromValue(QColor(Qt::red));
-            else
-                return QVariant::fromValue(QColor(Qt::blue));
+        case  Qt::TextColorRole: {
+            Color color;
+
+            if (cell->getForeground(color))
+                return QVariant::fromValue(QColor(255.0 * color.r, 255.0 * color.g, 255.0 * color.b, 255.0 * color.a));
+            else {
+                if (floatProp->getValue() < 0)
+                    return QVariant::fromValue(QColor(negativeFgColor));
+                else
+                    return QVariant::fromValue(QColor(positiveFgColor));
+            }
+        }
         case Qt::TextAlignmentRole: {
             if (alignment & Cell::ALIGNMENT_HIMPLIED) {
                 qtAlignment &= ~(Qt::AlignLeft | Qt::AlignHCenter | Qt::AlignRight);

@@ -3,7 +3,10 @@ if(BUILD_FEM_VTK)
     add_definitions(-DFC_USE_VTK)
 endif(BUILD_FEM_VTK)
 
-include(${VTK_USE_FILE})
+# suppress warnings from smesh
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANGXX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-overloaded-virtual")
+endif()
 
 add_subdirectory(App)
 
@@ -26,17 +29,48 @@ INSTALL(
         TestFem.py
 
         FemCommands.py
-        _CommandMeshFromShape.py
+        _CommandClearMesh.py
+        _CommandMeshNetgenFromShape.py
+        _CommandPrintMeshInfo.py
         _CommandPurgeResults.py
         _CommandRunSolver.py
         _CommandControlSolver.py
 
+        FemMechanicalResult.py
+        _FemMechanicalResult.py
+        _ViewProviderFemMechanicalResult.py
         _CommandShowResult.py
         _TaskPanelShowResult.py
         TaskPanelShowResult.ui
 
         FemAnalysis.py
         _CommandAnalysis.py
+
+        FemMeshGmsh.py
+        _FemMeshGmsh.py
+        _ViewProviderFemMeshGmsh.py
+        _CommandMeshGmshFromShape.py
+        _TaskPanelFemMeshGmsh.py
+        TaskPanelFemMeshGmsh.ui
+
+        FemGmshTools.py
+
+        FemMesh2Mesh.py
+        _CommandFEMMesh2Mesh.py
+
+        FemMeshGroup.py
+        _FemMeshGroup.py
+        _ViewProviderFemMeshGroup.py
+        _CommandMeshGroup.py
+        _TaskPanelFemMeshGroup.py
+        TaskPanelFemMeshGroup.ui
+
+        FemMeshRegion.py
+        _FemMeshRegion.py
+        _ViewProviderFemMeshRegion.py
+        _CommandMeshRegion.py
+        _TaskPanelFemMeshRegion.py
+        TaskPanelFemMeshRegion.ui
 
         FemBeamSection.py
         _FemBeamSection.py
@@ -52,16 +86,28 @@ INSTALL(
         _TaskPanelFemShellThickness.py
         TaskPanelFemShellThickness.ui
 
-        MechanicalMaterial.py
-        _MechanicalMaterial.py
-        _ViewProviderMechanicalMaterial.py
-        _CommandMechanicalMaterial.py
-        _TaskPanelMechanicalMaterial.py
-        TaskPanelMechanicalMaterial.ui
+        FemConstraintSelfWeight.py
+        _FemConstraintSelfWeight.py
+        _ViewProviderFemConstraintSelfWeight.py
+        _CommandConstraintSelfWeight.py
+
+        FemMaterial.py
+        _FemMaterial.py
+        _ViewProviderFemMaterial.py
+        _CommandMaterialSolid.py
+        _CommandMaterialFluid.py
+        _TaskPanelFemMaterial.py
+        TaskPanelFemMaterial.ui
+
+        FemMaterialMechanicalNonlinear.py
+        _FemMaterialMechanicalNonlinear.py
+        _ViewProviderFemMaterialMechanicalNonlinear.py
+        _CommandMaterialMechanicalNonlinear.py
 
         # solver CalculiX ccx
-        ccxDatReader.py
-        ccxFrdReader.py
+        importInpMesh.py
+        importCcxDatResults.py
+        importCcxFrdResults.py
         FemInputWriterCcx.py
         FemToolsCcx.py
         FemSolverCalculix.py
@@ -73,7 +119,7 @@ INSTALL(
 
         # solver Z88
         importZ88Mesh.py
-        z88DispReader.py
+        importZ88O2Results.py
         FemInputWriterZ88.py
         FemToolsZ88.py
         FemSolverZ88.py
@@ -81,10 +127,8 @@ INSTALL(
         _ViewProviderFemSolverZ88.py
         _CommandSolverZ88.py
 
-        FemConstraintSelfWeight.py
-        _FemConstraintSelfWeight.py
-        _ViewProviderFemConstraintSelfWeight.py
-        _CommandConstraintSelfWeight.py
+        # additional imports and exports
+        importVTKResults.py
 
     DESTINATION
         Mod/Fem

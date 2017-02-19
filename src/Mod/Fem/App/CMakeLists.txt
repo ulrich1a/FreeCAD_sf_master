@@ -13,44 +13,34 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_SOURCE_DIR}/src/3rdParty/ANN/include
     ${Boost_INCLUDE_DIRS}
-    ${QT_INCLUDE_DIR}
     ${OCC_INCLUDE_DIR}
     ${PYTHON_INCLUDE_DIRS}
     ${ZLIB_INCLUDE_DIR}
     ${XercesC_INCLUDE_DIRS}
     ${SMESH_INCLUDE_DIR}
-    ${VTK_INCLUDE_DIR}
+    ${NETGEN_INCLUDE_DIRS}
+    ${VTK_INCLUDE_DIRS}
 )
 
 link_directories(${OCC_LIBRARY_DIR})
 
 set(Fem_LIBS
-        Part
-        FreeCADApp
-        StdMeshers
-        SMESH
-        SMDS
-        SMESHDS
-    )
+    Part
+    FreeCADApp
+    StdMeshers
+    SMESH
+    SMDS
+    SMESHDS
+)
 
 if(BUILD_FEM_NETGEN)
-    set(Fem_LIBS
-        ${Fem_LIBS}
+    list(APPEND Fem_LIBS
         NETGENPlugin
     )
 endif(BUILD_FEM_NETGEN)
 
-if(BUILD_FEM_VTK)
-    set(Fem_LIBS
-        ${Fem_LIBS}
-        ${VTK_LIBRARIES}
-    )
-endif(BUILD_FEM_VTK)
-
 generate_from_xml(FemMeshPy)
-
 
 SET(Python_SRCS
     FemMeshPy.xml
@@ -73,46 +63,77 @@ SOURCE_GROUP("Module" FILES ${Mod_SRCS})
 SET(FemScripts_SRCS
     _CommandAnalysis.py
     _CommandBeamSection.py
+    _CommandClearMesh.py
     _CommandControlSolver.py
     _CommandConstraintSelfWeight.py
-    _CommandMechanicalMaterial.py
-    _CommandShowResult.py
-    _CommandMeshFromShape.py
+    _CommandFEMMesh2Mesh.py
+    _CommandMaterialMechanicalNonlinear.py
+    _CommandMaterialSolid.py
+    _CommandMaterialFluid.py
+    _CommandMeshGmshFromShape.py
+    _CommandMeshNetgenFromShape.py
+    _CommandMeshGroup.py
+    _CommandMeshRegion.py
+    _CommandPrintMeshInfo.py
     _CommandPurgeResults.py
     _CommandRunSolver.py
     _CommandShellThickness.py
+    _CommandShowResult.py
     _CommandSolverCalculix.py
     _CommandSolverZ88.py
     _FemBeamSection.py
     _FemConstraintSelfWeight.py
+    _FemMaterialMechanicalNonlinear.py
+    _FemMechanicalResult.py
+    _FemMeshGmsh.py
+    _FemMeshGroup.py
+    _FemMeshRegion.py
     _FemShellThickness.py
     _FemSolverCalculix.py
     _FemSolverZ88.py
-    _MechanicalMaterial.py
+    _FemMaterial.py
     _TaskPanelFemBeamSection.py
+    _TaskPanelFemMeshGmsh.py
+    _TaskPanelFemMeshGroup.py
+    _TaskPanelFemMeshRegion.py
     _TaskPanelFemShellThickness.py
     _TaskPanelFemSolverCalculix.py
-    _TaskPanelMechanicalMaterial.py
+    _TaskPanelFemMaterial.py
     _TaskPanelShowResult.py
     _ViewProviderFemBeamSection.py
     _ViewProviderFemConstraintSelfWeight.py
+    _ViewProviderFemMaterialMechanicalNonlinear.py
+    _ViewProviderFemMechanicalResult.py
+    _ViewProviderFemMeshGmsh.py
+    _ViewProviderFemMeshGroup.py
+    _ViewProviderFemMeshRegion.py
     _ViewProviderFemShellThickness.py
     _ViewProviderFemSolverCalculix.py
     _ViewProviderFemSolverZ88.py
-    _ViewProviderMechanicalMaterial.py
-    ccxDatReader.py
-    ccxFrdReader.py
+    _ViewProviderFemMaterial.py
     convert2TetGen.py
+    importCcxDatResults.py
+    importCcxFrdResults.py
+    importInpMesh.py
+    importVTKResults.py
     importZ88Mesh.py
+    importZ88O2Results.py
     Init.py
     InitGui.py
     FemAnalysis.py
     FemBeamSection.py
     FemCommands.py
     FemConstraintSelfWeight.py
+    FemGmshTools.py
     FemInputWriter.py
     FemInputWriterCcx.py
     FemInputWriterZ88.py
+    FemMaterialMechanicalNonlinear.py
+    FemMechanicalResult.py
+    FemMesh2Mesh.py
+    FemMeshGmsh.py
+    FemMeshGroup.py
+    FemMeshRegion.py
     FemMeshTools.py
     FemShellThickness.py
     FemSolverCalculix.py
@@ -120,14 +141,16 @@ SET(FemScripts_SRCS
     FemTools.py
     FemToolsCcx.py
     FemToolsZ88.py
-    MechanicalMaterial.py
+    FemMaterial.py
     FemSelectionObserver.py
     TestFem.py
-    z88DispReader.py
     TaskPanelFemBeamSection.ui
+    TaskPanelFemMeshGmsh.ui
+    TaskPanelFemMeshGroup.ui
+    TaskPanelFemMeshRegion.ui
     TaskPanelFemShellThickness.ui
     TaskPanelFemSolverCalculix.ui
-    TaskPanelMechanicalMaterial.ui
+    TaskPanelFemMaterial.ui
     TaskPanelShowResult.ui
 )
 #SOURCE_GROUP("Scripts" FILES ${FemScripts_SRCS})
@@ -197,6 +220,8 @@ SET(FemConstraints_SRCS
     FemConstraintFixed.h
     FemConstraintForce.cpp
     FemConstraintForce.h
+    FemConstraintFluidBoundary.cpp
+    FemConstraintFluidBoundary.h
     FemConstraintPressure.cpp
     FemConstraintPressure.h
     FemConstraintGear.cpp
@@ -215,6 +240,8 @@ SET(FemConstraints_SRCS
     FemConstraintPlaneRotation.h
     FemConstraintContact.cpp
     FemConstraintContact.h
+    FemConstraintTransform.cpp
+    FemConstraintTransform.h
     )
 SOURCE_GROUP("Constraints" FILES ${FemConstraints_SRCS})
 
@@ -230,6 +257,8 @@ if(BUILD_FEM_VTK)
         FemPostFilter.cpp
         FemPostFunction.h
         FemPostFunction.cpp
+        FemVTKTools.h
+        FemVTKTools.cpp
     )
     SOURCE_GROUP("PostObjects" FILES ${FemPost_SRCS})
 endif(BUILD_FEM_VTK)

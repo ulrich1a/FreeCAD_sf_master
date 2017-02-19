@@ -57,6 +57,7 @@
 #include <App/Document.h>
 
 #include <Gui/Application.h>
+#include <Gui/Command.h>
 #include <Gui/Document.h>
 
 #include <QDomDocument>
@@ -172,7 +173,11 @@ DocumentRecovery::DocumentRecovery(const QList<QFileInfo>& dirs, QWidget* parent
 {
     d_ptr->ui.setupUi(this);
     d_ptr->ui.buttonBox->button(QDialogButtonBox::Ok)->setText(tr("Start Recovery"));
+#if QT_VERSION >= 0x050000
+    d_ptr->ui.treeWidget->header()->setSectionResizeMode(QHeaderView::Stretch);
+#else
     d_ptr->ui.treeWidget->header()->setResizeMode(QHeaderView::Stretch);
+#endif
 
     d_ptr->recovered = false;
 
@@ -212,7 +217,7 @@ QString DocumentRecovery::createProjectFile(const QString& documentXml)
     str << doctools << "\n";
     str << "createDocument(\"" << (const char*)source.toUtf8()
         << "\", \"" << (const char*)dest.toUtf8() << "\")";
-    Application::Instance->runPythonCode(str.str().c_str());
+    Gui::Command::runCommand(Gui::Command::App, str.str().c_str());
 
     return dest;
 }

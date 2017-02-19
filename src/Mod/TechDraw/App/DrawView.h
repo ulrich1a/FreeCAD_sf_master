@@ -23,6 +23,8 @@
 #ifndef _DrawView_h_
 #define _DrawView_h_
 
+#include <QRectF>
+
 #include <App/DocumentObject.h>
 #include <App/PropertyStandard.h>
 #include <App/PropertyGeo.h>
@@ -46,18 +48,21 @@ public:
 
     App::PropertyFloat X;
     App::PropertyFloat Y;
-    App::PropertyFloat Scale;
+    App::PropertyFloatConstraint Scale;
 
     App::PropertyEnumeration ScaleType;
     App::PropertyFloat Rotation;
+    App::PropertyBool  KeepLabel;
+    App::PropertyString Caption;
 
     /** @name methods overide Feature */
     //@{
     /// recalculate the Feature
-    virtual App::DocumentObjectExecReturn *recompute(void);
     virtual App::DocumentObjectExecReturn *execute(void);
     virtual void onDocumentRestored();
+    virtual short mustExecute() const;
     //@}
+    void Restore(Base::XMLReader &reader);
 
     bool isInClip();
 
@@ -71,14 +76,22 @@ public:
     DrawPage* findParentPage() const;
     bool allowAutoPos() {return autoPos;};                //sb in DPGI??
     void setAutoPos(bool state) {autoPos = state;};
+    bool isMouseMove() {return mouseMove;};
+    void setMouseMove(bool state) {mouseMove = state;};
+    virtual QRectF getRect() const;                       //must be overridden by derived class
+    virtual double autoScale(double w, double h) const;
+    virtual bool checkFit(DrawPage*) const;
+    virtual void setPosition(double x, double y);
 
 protected:
     void onChanged(const App::Property* prop);
     std::string pageFeatName;
     bool autoPos;
+    bool mouseMove;
 
 private:
     static const char* ScaleTypeEnums[];
+    static App::PropertyFloatConstraint::Constraints scaleRange;
 };
 
 typedef App::FeaturePythonT<DrawView> DrawViewPython;

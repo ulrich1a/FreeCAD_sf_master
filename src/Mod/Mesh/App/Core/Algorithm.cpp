@@ -39,8 +39,8 @@
 
 using namespace MeshCore;
 using Base::BoundBox3f;
-using Base::BoundBox2D;
-using Base::Polygon2D;
+using Base::BoundBox2d;
+using Base::Polygon2d;
 
 
 bool MeshAlgorithm::IsVertexVisible (const Base::Vector3f &rcVertex, const Base::Vector3f &rcView, const MeshFacetGrid &rclGrid) const
@@ -173,7 +173,7 @@ bool MeshAlgorithm::NearestFacetOnRay (const Base::Vector3f &rclPt, const Base::
 }
 
 bool MeshAlgorithm::RayNearestField (const Base::Vector3f &rclPt, const Base::Vector3f &rclDir, const std::vector<unsigned long> &raulFacets,
-                                     Base::Vector3f &rclRes, unsigned long &rulFacet, float fMaxAngle) const
+                                     Base::Vector3f &rclRes, unsigned long &rulFacet, float /*fMaxAngle*/) const
 {
     Base::Vector3f  clProj, clRes;
     bool bSol = false;
@@ -1075,7 +1075,7 @@ int MeshAlgorithm::Surround(const Base::BoundBox3f& rBox, const Base::Vector3f& 
     return -1;
 }
 
-void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewProjMethod* pclProj, const Base::Polygon2D& rclPoly,
+void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewProjMethod* pclProj, const Base::Polygon2d& rclPoly,
                                 bool bInner, std::vector<unsigned long> &raulFacets) const
 {
     std::vector<unsigned long>::iterator it;
@@ -1088,7 +1088,7 @@ void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewPr
     if (bInner)
     {
         BoundBox3f clBBox3d;
-        BoundBox2D clViewBBox, clPolyBBox;
+        BoundBox2d clViewBBox, clPolyBBox;
         std::vector<unsigned long> aulAllElements;
 
         //B-Box des Polygons
@@ -1121,7 +1121,7 @@ void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewPr
             {
                 clPt2d = pclProj->operator()(rclFacet._aclPoints[j]);
                 clGravityOfFacet += clPt2d;
-                if (rclPoly.Contains(Base::Vector2D(clPt2d.x, clPt2d.y)) == bInner)
+                if (rclPoly.Contains(Base::Vector2d(clPt2d.x, clPt2d.y)) == bInner)
                 {
                     raulFacets.push_back(*it);
                     bNoPointInside = false;
@@ -1134,7 +1134,7 @@ void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewPr
             {
               clGravityOfFacet *= 1.0f/3.0f;
 
-              if (rclPoly.Contains(Base::Vector2D(clGravityOfFacet.x, clGravityOfFacet.y)) == bInner)
+              if (rclPoly.Contains(Base::Vector2d(clGravityOfFacet.x, clGravityOfFacet.y)) == bInner)
                  raulFacets.push_back(*it);
             }
 
@@ -1150,7 +1150,7 @@ void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewPr
           for (int j=0; j<3; j++)
           {
               clPt2d = pclProj->operator()(clIter->_aclPoints[j]);
-              if (rclPoly.Contains(Base::Vector2D(clPt2d.x, clPt2d.y)) == bInner)
+              if (rclPoly.Contains(Base::Vector2d(clPt2d.x, clPt2d.y)) == bInner)
               {
                   raulFacets.push_back(clIter.Position());
                   break;
@@ -1161,7 +1161,7 @@ void MeshAlgorithm::CheckFacets(const MeshFacetGrid& rclGrid, const Base::ViewPr
     }
 }
 
-void MeshAlgorithm::CheckFacets(const Base::ViewProjMethod* pclProj, const Base::Polygon2D& rclPoly,
+void MeshAlgorithm::CheckFacets(const Base::ViewProjMethod* pclProj, const Base::Polygon2d& rclPoly,
                                 bool bInner, std::vector<unsigned long> &raulFacets) const
 {
     const MeshPointArray& p = _rclMesh.GetPoints();
@@ -1171,7 +1171,7 @@ void MeshAlgorithm::CheckFacets(const Base::ViewProjMethod* pclProj, const Base:
     for (MeshFacetArray::_TConstIterator it = f.begin(); it != f.end(); ++it,++index) {
         for (int i = 0; i < 3; i++) {
             pt2d = (*pclProj)(p[it->_aulPoints[i]]);
-            if (rclPoly.Contains(Base::Vector2D(pt2d.x, pt2d.y)) == bInner) {
+            if (rclPoly.Contains(Base::Vector2d(pt2d.x, pt2d.y)) == bInner) {
                 raulFacets.push_back(index);
                 break;
             }
@@ -1570,34 +1570,34 @@ bool MeshAlgorithm::ConnectPolygons(std::list<std::vector<Base::Vector3f> > &clP
                                     std::list<std::pair<Base::Vector3f, Base::Vector3f> > &rclLines) const
 {
 
-  for(std::list< std::vector<Base::Vector3f> >::iterator OutIter = clPolyList.begin(); OutIter != clPolyList.end(); ++OutIter)
-  {
-    std::pair<Base::Vector3f,Base::Vector3f> currentSort;
-    float fDist = Base::Distance(OutIter->front(),OutIter->back());
-    currentSort.first = OutIter->front();
-    currentSort.second = OutIter->back();
+    for (std::list< std::vector<Base::Vector3f> >::iterator OutIter = clPolyList.begin(); OutIter != clPolyList.end(); ++OutIter) {
+        if (OutIter->empty())
+            continue;
+        std::pair<Base::Vector3f,Base::Vector3f> currentSort;
+        float fDist = Base::Distance(OutIter->front(),OutIter->back());
+        currentSort.first = OutIter->front();
+        currentSort.second = OutIter->back();
 
-    for(std::list< std::vector<Base::Vector3f> >::iterator InnerIter = clPolyList.begin(); InnerIter != clPolyList.end(); ++InnerIter)
-    {
-      if(OutIter == InnerIter) continue;
+        for (std::list< std::vector<Base::Vector3f> >::iterator InnerIter = clPolyList.begin(); InnerIter != clPolyList.end(); ++InnerIter) {
+            if (OutIter == InnerIter)
+                continue;
 
-      if(Base::Distance(OutIter->front(),InnerIter->front()) < fDist)
-      {
-        currentSort.second = InnerIter->front();
-        fDist = Base::Distance(OutIter->front(),InnerIter->front());
-      }
-      if(Base::Distance(OutIter->front(),InnerIter->back()) < fDist)
-      {
-        currentSort.second = InnerIter->back();
-        fDist = Base::Distance(OutIter->front(),InnerIter->back());
-      }
+            if (Base::Distance(OutIter->front(), InnerIter->front()) < fDist) {
+                currentSort.second = InnerIter->front();
+                fDist = Base::Distance(OutIter->front(),InnerIter->front());
+            }
+
+            if (Base::Distance(OutIter->front(), InnerIter->back()) < fDist) {
+                currentSort.second = InnerIter->back();
+                fDist = Base::Distance(OutIter->front(),InnerIter->back());
+            }
+        }
+
+        rclLines.push_front(currentSort);
+
     }
 
-    rclLines.push_front(currentSort);
-
-  }
-
-  return true;
+    return true;
 }
 
 void MeshAlgorithm::GetFacetsFromPlane (const MeshFacetGrid &rclGrid, const Base::Vector3f& clNormal, float d, const Base::Vector3f &rclLeft,

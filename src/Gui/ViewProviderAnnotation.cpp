@@ -57,6 +57,7 @@
 #include "SoTextLabel.h"
 #include "Application.h"
 #include "Document.h"
+#include "Window.h"
 
 using namespace Gui;
 
@@ -189,6 +190,22 @@ void ViewProviderAnnotation::attach(App::DocumentObject* f)
     SoAnnotation* anno3d = new SoAnnotation();
 
     SoFCSelection* textsep = new SoFCSelection();
+    
+    // set selection/highlight colors
+    float transparency;
+    ParameterGrp::handle hGrp = Gui::WindowParameter::getDefaultParameter()->GetGroup("View");
+    SbColor highlightColor = textsep->colorHighlight.getValue();
+    unsigned long highlight = (unsigned long)(highlightColor.getPackedValue());
+    highlight = hGrp->GetUnsigned("HighlightColor", highlight);
+    highlightColor.setPackedValue((uint32_t)highlight, transparency);
+    textsep->colorHighlight.setValue(highlightColor);
+    // Do the same with the selection color
+    SbColor selectionColor = textsep->colorSelection.getValue();
+    unsigned long selection = (unsigned long)(selectionColor.getPackedValue());
+    selection = hGrp->GetUnsigned("SelectionColor", selection);
+    selectionColor.setPackedValue((uint32_t)selection, transparency);
+    textsep->colorSelection.setValue(selectionColor);
+
     textsep->objectName = pcObject->getNameInDocument();
     textsep->documentName = pcObject->getDocument()->getName();
     textsep->subElementName = "Main";
@@ -199,6 +216,11 @@ void ViewProviderAnnotation::attach(App::DocumentObject* f)
     textsep->addChild(pLabel);
 
     SoFCSelection* textsep3d = new SoFCSelection();
+    
+    // set sel/highlight color here too
+    textsep3d->colorHighlight.setValue(highlightColor);
+    textsep3d->colorSelection.setValue(selectionColor);
+    
     textsep3d->objectName = pcObject->getNameInDocument();
     textsep3d->documentName = pcObject->getDocument()->getName();
     textsep3d->subElementName = "Main";
@@ -388,13 +410,13 @@ void ViewProviderAnnotationLabel::setupContextMenu(QMenu* menu, QObject* receive
     menu->addAction(QObject::tr("Move annotation"), receiver, member);
 }
 
-void ViewProviderAnnotationLabel::dragStartCallback(void *data, SoDragger *)
+void ViewProviderAnnotationLabel::dragStartCallback(void *, SoDragger *)
 {
     // This is called when a manipulator is about to manipulating
     Gui::Application::Instance->activeDocument()->openCommand("Transform");
 }
 
-void ViewProviderAnnotationLabel::dragFinishCallback(void *data, SoDragger *)
+void ViewProviderAnnotationLabel::dragFinishCallback(void *, SoDragger *)
 {
     // This is called when a manipulator has done manipulating
     Gui::Application::Instance->activeDocument()->commitCommand();
@@ -412,6 +434,7 @@ void ViewProviderAnnotationLabel::dragMotionCallback(void *data, SoDragger *drag
 
 bool ViewProviderAnnotationLabel::setEdit(int ModNum)
 {
+    Q_UNUSED(ModNum); 
     SoSearchAction sa;
     sa.setInterest(SoSearchAction::FIRST);
     sa.setSearchingAll(false);
@@ -432,6 +455,7 @@ bool ViewProviderAnnotationLabel::setEdit(int ModNum)
 
 void ViewProviderAnnotationLabel::unsetEdit(int ModNum)
 {
+    Q_UNUSED(ModNum); 
     SoSearchAction sa;
     sa.setType(TranslateManip::getClassTypeId());
     sa.setInterest(SoSearchAction::FIRST);

@@ -9,6 +9,14 @@
 #include "AreaDxf.h"
 #include "kurve/geometry.h"
 
+#if defined (_POSIX_C_SOURCE)
+#   undef    _POSIX_C_SOURCE
+#endif
+
+#if defined (_XOPEN_SOURCE)
+#   undef    _XOPEN_SOURCE
+#endif
+
 #if _DEBUG
 #undef _DEBUG
 #include <Python.h>
@@ -17,7 +25,7 @@
 #include <Python.h>
 #endif
 
-#ifdef __GNUG__
+#if defined(__GNUG__) && !defined(__clang__)
 #pragma implementation
 #endif
 
@@ -63,13 +71,17 @@ boost::python::tuple transformed_point(const geoff_geometry::Matrix &matrix, dou
 static void print_curve(const CCurve& c)
 {
 	std::size_t nvertices = c.m_vertices.size();
+#if defined SIZEOF_SIZE_T && SIZEOF_SIZE_T == 4
+	printf("number of vertices = %d\n", nvertices);
+#else
 	printf("number of vertices = %lu\n", nvertices);
+#endif
 	int i = 0;
 	for(std::list<CVertex>::const_iterator It = c.m_vertices.begin(); It != c.m_vertices.end(); It++, i++)
 	{
 		const CVertex& vertex = *It;
-		printf("vertex %d type = %d, x = %g, y = %g", i+1, vertex.m_type, vertex.m_p.x / CArea::m_units, vertex.m_p.y / CArea::m_units);
-		if(vertex.m_type)printf(", xc = %g, yc = %g", vertex.m_c.x / CArea::m_units, vertex.m_c.y / CArea::m_units);
+		printf("vertex %d type = %d, x = %g, y = %g", i+1, vertex.m_type, vertex.m_p.x / CArea::get_units(), vertex.m_p.y / CArea::get_units());
+		if(vertex.m_type)printf(", xc = %g, yc = %g", vertex.m_c.x / CArea::get_units(), vertex.m_c.y / CArea::get_units());
 		printf("\n");
 	}
 }
@@ -100,12 +112,12 @@ static CVertex LastVertex(const CCurve& curve)
 
 static void set_units(double units)
 {
-	CArea::m_units = units;
+	CArea::set_units(units);
 }
 
 static double get_units()
 {
-	return CArea::m_units;
+	return CArea::get_units();
 }
 
 static bool holes_linked()
@@ -160,7 +172,7 @@ boost::python::list SplitArea(const CArea& a)
 	return alist;
 }
 
-void dxfArea(CArea& area, const char* str)
+void dxfArea(CArea& area, const char* /*str*/)
 {
 	area = CArea();
 }

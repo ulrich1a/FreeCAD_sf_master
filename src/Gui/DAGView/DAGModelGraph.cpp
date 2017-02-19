@@ -38,7 +38,9 @@ VertexProperty::VertexProperty() :
   text(new QGraphicsTextItem()),
   row(0),
   column(0),
+  topoSortIndex(0),
   lastVisibleState(VisibilityState::None),
+  lastFeatureState(FeatureState::None),
   dagVisible(true)
 {
   //set z values.
@@ -53,6 +55,14 @@ VertexProperty::VertexProperty() :
 EdgeProperty::EdgeProperty() : relation(BranchTag::None)
 {
 
+}
+
+bool Gui::DAG::hasRecord(const App::DocumentObject* dObjectIn, const GraphLinkContainer &containerIn)
+{
+  typedef GraphLinkContainer::index<GraphLinkRecord::ByDObject>::type List;
+  const List &list = containerIn.get<GraphLinkRecord::ByDObject>();
+  List::const_iterator it = list.find(dObjectIn);
+  return it != list.end();
 }
 
 const GraphLinkRecord& Gui::DAG::findRecord(Vertex vertexIn, const GraphLinkContainer &containerIn)

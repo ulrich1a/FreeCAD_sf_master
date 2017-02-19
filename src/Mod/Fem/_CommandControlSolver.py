@@ -24,12 +24,12 @@ __title__ = "Command Control Solver"
 __author__ = "Juergen Riegel"
 __url__ = "http://www.freecadweb.org"
 
-import FreeCAD
-from FemCommands import FemCommands
+## @package CommandControlSolver
+#  \ingroup FEM
 
-if FreeCAD.GuiUp:
-    import FreeCADGui
-    from PySide import QtCore
+from FemCommands import FemCommands
+import FreeCADGui
+from PySide import QtCore
 
 
 class _CommandControlSolver(FemCommands):
@@ -43,12 +43,8 @@ class _CommandControlSolver(FemCommands):
         self.is_active = 'with_solver'
 
     def Activated(self):
-
-        self.hide_parts_constraints_show_meshes()
-
         solver_obj = FreeCADGui.Selection.getSelection()[0]
         FreeCADGui.ActiveDocument.setEdit(solver_obj, 0)
 
 
-if FreeCAD.GuiUp:
-    FreeCADGui.addCommand('Fem_ControlSolver', _CommandControlSolver())
+FreeCADGui.addCommand('Fem_ControlSolver', _CommandControlSolver())

@@ -332,6 +332,8 @@ void Workbench::setupCustomShortcuts() const
 
 void Workbench::setupContextMenu(const char* recipient,MenuItem* item) const
 {
+    Q_UNUSED(recipient);
+    Q_UNUSED(item);
 }
 
 void Workbench::createMainWindowPopupMenu(MenuItem*) const
@@ -529,6 +531,7 @@ MenuItem* StdWorkbench::setupMenuBar() const
     MenuItem* visu = new MenuItem;
     visu->setCommand("Visibility");
     *visu << "Std_ToggleVisibility" << "Std_ShowSelection" << "Std_HideSelection"
+          << "Std_SelectVisibleObjects"
           << "Separator" << "Std_ToggleObjects" << "Std_ShowObjects" << "Std_HideObjects" 
           << "Separator" << "Std_ToggleSelectability"
           << "Separator" << "View_Measure_Toggle_All" << "View_Measure_Clear_All";
@@ -557,6 +560,9 @@ MenuItem* StdWorkbench::setupMenuBar() const
           << "Std_ExportGraphviz" << "Std_ProjectUtil" << "Separator"
           << "Std_MeasureDistance" << "Separator" 
           << "Std_DemoMode" << "Std_UnitsCalculator" << "Separator" << "Std_DlgCustomize";
+#ifdef BUILD_ADDONMGR
+    *tool << "Std_AddonMgr";
+#endif
 
     // Macro
     MenuItem* macro = new MenuItem( menuBar );
@@ -688,6 +694,8 @@ void BlankWorkbench::deactivated()
 
 void BlankWorkbench::setupContextMenu(const char* recipient,MenuItem* item) const
 {
+    Q_UNUSED(recipient);
+    Q_UNUSED(item);
 }
 
 MenuItem* BlankWorkbench::setupMenuBar() const
@@ -725,6 +733,8 @@ NoneWorkbench::~NoneWorkbench()
 
 void NoneWorkbench::setupContextMenu(const char* recipient,MenuItem* item) const
 {
+    Q_UNUSED(recipient);
+    Q_UNUSED(item);
 }
 
 MenuItem* NoneWorkbench::setupMenuBar() const
@@ -881,6 +891,7 @@ DockWindowItems* PythonBaseWorkbench::setupDockWindows() const
 
 void PythonBaseWorkbench::setupContextMenu(const char* recipient, MenuItem* item) const
 {
+    Q_UNUSED(recipient);
     QList<MenuItem*> items = _contextMenu->getItems();
     for (QList<MenuItem*>::Iterator it = items.begin(); it != items.end(); ++it) {
         item->appendItem((*it)->copy());

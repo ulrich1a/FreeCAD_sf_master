@@ -55,16 +55,24 @@ recompute path. Also enables more complicated dependencies beyond trees.
 # include <algorithm>
 # include <sstream>
 # include <climits>
+# include <bitset>
 #endif
 
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/subgraph.hpp>
+#include <boost/graph/graphviz.hpp>
+
+#ifdef USE_OLD_DAG
 #include <boost/graph/topological_sort.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
 #include <boost/graph/visitors.hpp>
-#include <boost/graph/graphviz.hpp>
+#endif //USE_OLD_DAG
+
 #include <boost/bind.hpp>
 #include <boost/regex.hpp>
-#include <boost/unordered_set.hpp>
+#include <unordered_set>
+#include <unordered_map>
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -136,16 +144,17 @@ struct DocumentP
     DocumentObject* activeObject;
     Transaction *activeUndoTransaction;
     int iTransactionMode;
-    std::map<Vertex,DocumentObject*> vertexMap;
     bool rollback;
     bool undoing; ///< document in the middle of undo or redo
-    bool closable;
-    bool keepTrailingDigits;
+    std::bitset<32> StatusBits;
     int iUndoMode;
     unsigned int UndoMemSize;
     unsigned int UndoMaxStackSize;
+#ifdef USE_OLD_DAG
     DependencyList DepList;
     std::map<DocumentObject*,Vertex> VertexObjectList;
+    std::map<Vertex,DocumentObject*> vertexMap;
+#endif //USE_OLD_DAG
 
     DocumentP() {
         activeObject = 0;
@@ -153,8 +162,8 @@ struct DocumentP
         iTransactionMode = 0;
         rollback = false;
         undoing = false;
-        closable = true;
-        keepTrailingDigits = true;
+        StatusBits.set((size_t)Document::Closable, true);
+        StatusBits.set((size_t)Document::KeepTrailingDigits, true);
         iUndoMode = 0;
         UndoMemSize = 0;
         UndoMaxStackSize = 20;
@@ -164,6 +173,16 @@ struct DocumentP
 } // namespace App
 
 PROPERTY_SOURCE(App::Document, App::PropertyContainer)
+
+bool Document::testStatus(Status pos) const
+{
+    return d->StatusBits.test((size_t)pos);
+}
+
+void Document::setStatus(Status pos, bool on)
+{
+    d->StatusBits.set((size_t)pos, on);
+}
 
 void Document::writeDependencyGraphViz(std::ostream &out)
 {
@@ -200,7 +219,7 @@ void Document::exportGraphviz(std::ostream& out) const
 {
     /* Typedefs for a graph with graphviz attributes */
     typedef std::map<std::string, std::string> GraphvizAttributes;
-    typedef subgraph< adjacency_list<vecS, vecS, directedS,
+    typedef boost::subgraph< adjacency_list<vecS, vecS, directedS,
             property<vertex_attribute_t, GraphvizAttributes>,
             property<edge_index_t, int, property<edge_attribute_t, GraphvizAttributes> >,
             property<graph_name_t, std::string,
@@ -234,6 +253,7 @@ void Document::exportGraphviz(std::ostream& out) const
             addSubgraphs();
             buildAdjacencyList();
             addEdges();
+            markCycles();
         }
 
         /**
@@ -488,14 +508,19 @@ void Document::exportGraphviz(std::ostream& out) const
 
             // Add edges between document objects
             for (std::map<std::string, DocumentObject*>::const_iterator It = d->objectMap.begin(); It != d->objectMap.end();++It) {
+                std::map<DocumentObject*, int> dups;
                 std::vector<DocumentObject*> OutList = It->second->getOutList();
+                const DocumentObject * docObj = It->second;
+
                 for (std::vector<DocumentObject*>::const_iterator It2=OutList.begin();It2!=OutList.end();++It2) {
                     if (*It2) {
-                        const DocumentObject * docObj = It->second;
 
-                        // Skip duplicate edges
-                        if (edge(GlobalVertexList[getId(docObj)], GlobalVertexList[getId(*It2)], DepList).second)
+                        // Count duplicate edges
+                        bool inserted = edge(GlobalVertexList[getId(docObj)], GlobalVertexList[getId(*It2)], DepList).second;
+                        if (inserted) {
+                            dups[*It2]++;
                             continue;
+                        }
 
                         // Skip edge if an expression edge already exists
                         if (existingEdges.find(std::make_pair(docObj, *It2)) != existingEdges.end())
@@ -504,7 +529,6 @@ void Document::exportGraphviz(std::ostream& out) const
                         // Add edge
 
                         Edge edge;
-                        bool inserted;
 
                         tie(edge, inserted) = add_edge(GlobalVertexList[getId(docObj)], GlobalVertexList[getId(*It2)], DepList);
 
@@ -515,8 +539,107 @@ void Document::exportGraphviz(std::ostream& out) const
                             edgeAttrMap[edge]["lhead"] = getClusterName(*It2);
                     }
                 }
+
+                // Set labels for duplicate edges
+                for (std::map<DocumentObject*, int>::const_iterator It2 = dups.begin(); It2 != dups.end(); ++It2) {
+                    Edge e(edge(GlobalVertexList[getId(It->second)], GlobalVertexList[getId(It2->first)], DepList).first);
+                    std::stringstream s;
+                    s << " " << (It2->second + 1) << "x";
+                    edgeAttrMap[e]["label"] = s.str();
+                }
+
             }
 
+        }
+
+        typedef std::unordered_multimap<Vertex, Edge> EdgeMap;
+
+        void removeEdges(EdgeMap & in_edges,
+                         EdgeMap & out_edges,
+                         std::pair<EdgeMap::iterator, EdgeMap::iterator > i_pair,
+                         std::function<Vertex (const Edge&)> select_vertex) {
+            auto i = i_pair.first;
+
+            while (i != i_pair.second) {
+                // Remove from in edges in other nodes
+                auto in_i_pair = in_edges.equal_range(select_vertex(i->second));
+                auto in_i = in_i_pair.first;
+
+                while (in_i != in_i_pair.second) {
+                    if (in_i->second == i->second)
+                        in_i = in_edges.erase(in_i);
+                    else
+                        ++in_i;
+                }
+
+                // Remove node from out_edges
+                i = out_edges.erase(i);
+            }
+        }
+
+        void markCycles() {
+            bool changed = true;
+            std::unordered_set<Vertex> in_use;
+            EdgeMap in_edges;
+            EdgeMap out_edges;
+
+            // Add all vertices to the in_use set
+            graph_traits<Graph>::vertex_iterator vi, vi_end;
+            tie(vi, vi_end) = vertices(DepList);
+            for (; vi != vi_end; ++vi)
+                in_use.insert(*vi);
+
+            // Add all edges to the in_edges and out_edges multimaps
+            graph_traits<Graph>::edge_iterator ei, ei_end;
+            tie(ei, ei_end) = edges(DepList);
+            for (; ei != ei_end; ++ei) {
+                in_edges.insert(std::make_pair<Vertex, Edge>(target(*ei, DepList), *ei));
+                out_edges.insert(std::make_pair<Vertex, Edge>(source(*ei, DepList), *ei));
+            }
+
+            // Go through dependency graph and remove nodes with either no input or output
+            // A normal DAG without any cycles will get all its edges removed.
+            // If one or more cycles exist in the graph, there will remain nodes with
+            // both in and out edges.
+
+            while (changed) {
+                auto uvi = in_use.begin();
+                auto uvi_end = in_use.end();
+
+                // Flag that no changes has occured so far. If the loop goes through
+                // without this flag being set to true, we are done.
+                changed = false;
+
+                while (uvi != uvi_end) {
+                    auto i_in_deg_pair = in_edges.equal_range(*uvi);
+                    auto i_out_deg_pair = out_edges.equal_range(*uvi);
+
+                    if (i_in_deg_pair.first == in_edges.end() && i_out_deg_pair.first == out_edges.end()) {
+                        uvi = in_use.erase(uvi);
+                        continue;
+                    }
+
+                    // Remove out edges of nodes that don't have a single edge in
+                    if (i_in_deg_pair.first == in_edges.end()) {
+                        removeEdges(in_edges, out_edges, i_out_deg_pair, [&](Edge e) { return target(e, DepList); });
+                        changed = true;
+                        i_out_deg_pair = out_edges.equal_range(*uvi);
+                    }
+
+                    // Remove in edges of nodes that don't have a single edge out
+                    if (i_out_deg_pair.first == out_edges.end()) {
+                        removeEdges(out_edges, in_edges, i_in_deg_pair, [&](Edge e) { return source(e, DepList); });
+                        changed = true;
+                    }
+
+                    ++uvi;
+                }
+            }
+
+            // Update colors in graph
+            const boost::property_map<Graph, boost::edge_attribute_t>::type& edgeAttrMap = boost::get(boost::edge_attribute, DepList);
+            for (auto ei = out_edges.begin(), ei_end = out_edges.end(); ei != ei_end; ++ei)
+                edgeAttrMap[ei->second]["color"] = "red";
         }
 
         const struct DocumentP* d;
@@ -1143,7 +1266,11 @@ void Document::writeObjects(const std::vector<App::DocumentObject*>& obj,
 
     writer.incInd(); // indentation for 'Object name'
     for (it = obj.begin(); it != obj.end(); ++it) {
-        writer.Stream() << writer.ind() << "<Object name=\"" << (*it)->getNameInDocument() << "\">" << endl;
+        writer.Stream() << writer.ind() << "<Object name=\"" << (*it)->getNameInDocument() << "\"";
+        if((*it)->hasExtensions())
+            writer.Stream() << " Extensions=\"True\"";
+            
+        writer.Stream() << ">" << endl;
         (*it)->Save(writer);
         writer.Stream() << writer.ind() << "</Object>" << endl;
     }
@@ -1156,8 +1283,8 @@ void Document::writeObjects(const std::vector<App::DocumentObject*>& obj,
 std::vector<App::DocumentObject*>
 Document::readObjects(Base::XMLReader& reader)
 {
-    bool keepDigits = d->keepTrailingDigits;
-    d->keepTrailingDigits = !reader.doNameMapping();
+    bool keepDigits = testStatus(Document::KeepTrailingDigits);
+    setStatus(Document::KeepTrailingDigits, !reader.doNameMapping());
     std::vector<App::DocumentObject*> objs;
 
     // read the object types
@@ -1185,8 +1312,9 @@ Document::readObjects(Base::XMLReader& reader)
             Base::Console().Error("Cannot create object '%s': (%s)\n", name.c_str(), e.what());
         }
     }
+
     reader.readEndElement("Objects");
-    d->keepTrailingDigits = keepDigits;
+    setStatus(Document::KeepTrailingDigits, keepDigits);
 
     // read the features itself
     reader.readElement("ObjectData");
@@ -1388,7 +1516,8 @@ bool Document::save (void)
                     fn = str.str();
                 }
 
-                fi.renameFile(fn.c_str());
+                if (fi.renameFile(fn.c_str()) == false)
+                    Base::Console().Warning("Cannot rename project file to backup file\n");
             }
             else {
                 fi.deleteFile();
@@ -1517,12 +1646,12 @@ vector<DocumentObject*> Document::getTouched(void) const
 
 void Document::setClosable(bool c)
 {
-    d->closable = c;
+    setStatus(Document::Closable, c);
 }
 
 bool Document::isClosable() const
 {
-    return d->closable;
+    return testStatus(Document::Closable);
 }
 
 int Document::countObjects(void) const
@@ -1546,6 +1675,7 @@ std::vector<App::DocumentObject*> Document::getInList(const DocumentObject* me) 
     return result;
 }
 
+#ifdef USE_OLD_DAG
 namespace boost {
 // recursive helper function to get all dependencies
 void out_edges_recursive(const Vertex& v, const DependencyList& g, std::set<Vertex>& out)
@@ -1631,32 +1761,11 @@ Document::getDependencyList(const std::vector<App::DocumentObject*>& objs) const
         ary.push_back(VertexMap[*it]);
     return ary;
 }
-
-/**
- * @brief Signal that object identifiers, typically a property or document object has been renamed.
- *
- * This function iterates through all document object in the document, and calls its
- * renameObjectIdentifiers functions.
- *
- * @param paths Map with current and new names
- */
-
-void Document::renameObjectIdentifiers(const std::map<App::ObjectIdentifier, App::ObjectIdentifier> &paths)
-{
-    std::map<App::ObjectIdentifier, App::ObjectIdentifier> extendedPaths;
-
-    std::map<App::ObjectIdentifier, App::ObjectIdentifier>::const_iterator it = paths.begin();
-    while (it != paths.end()) {
-        extendedPaths[it->first.canonicalPath()] = it->second.canonicalPath();
-        ++it;
-    }
-
-    for (std::vector<DocumentObject*>::iterator it = d->objectArray.begin(); it != d->objectArray.end(); ++it)
-        (*it)->renameObjectIdentifiers(extendedPaths);
-}
+#endif
 
 void Document::_rebuildDependencyList(void)
 {
+#ifdef USE_OLD_DAG
     d->VertexObjectList.clear();
     d->DepList.clear();
     // Filling up the adjacency List
@@ -1686,12 +1795,67 @@ void Document::_rebuildDependencyList(void)
                 add_edge(d->VertexObjectList[It->second],d->VertexObjectList[*It2],d->DepList);
         }
     }
+#endif
 }
 
-void Document::recompute()
+#ifndef USE_OLD_DAG
+std::vector<App::DocumentObject*> Document::getDependencyList(const std::vector<App::DocumentObject*>& objs) const
 {
+    std::vector<App::DocumentObject*> dep;
+    for (auto obj : objs){
+        if(!obj)
+            continue;
+        std::vector<App::DocumentObject*> objDep = obj->getOutListRecursive();
+        dep.insert(dep.end(), objDep.begin(), objDep.end());
+        dep.push_back(obj);
+    }
+
+    // remove duplicate entries and resize the vector
+    std::sort(dep.begin(), dep.end());
+    auto newEnd = std::unique(dep.begin(), dep.end());
+    dep.resize(std::distance(dep.begin(), newEnd));
+
+    return dep;
+}
+#endif // USE_OLD_DAG
+
+
+/**
+ * @brief Signal that object identifiers, typically a property or document object has been renamed.
+ *
+ * This function iterates through all document object in the document, and calls its
+ * renameObjectIdentifiers functions.
+ *
+ * @param paths Map with current and new names
+ */
+
+void Document::renameObjectIdentifiers(const std::map<App::ObjectIdentifier, App::ObjectIdentifier> &paths)
+{
+    std::map<App::ObjectIdentifier, App::ObjectIdentifier> extendedPaths;
+
+    std::map<App::ObjectIdentifier, App::ObjectIdentifier>::const_iterator it = paths.begin();
+    while (it != paths.end()) {
+        extendedPaths[it->first.canonicalPath()] = it->second.canonicalPath();
+        ++it;
+    }
+
+    for (std::vector<DocumentObject*>::iterator it = d->objectArray.begin(); it != d->objectArray.end(); ++it)
+        (*it)->renameObjectIdentifiers(extendedPaths);
+}
+
+#ifdef USE_OLD_DAG
+int Document::recompute()
+{
+    int objectCount = 0;
+    
+    // The 'SkipRecompute' flag can be (tmp.) set to avoid to many
+    // time expensive recomputes
+    bool skip = testStatus(Document::SkipRecompute);
+    if (skip)
+        return 0;
+
     // delete recompute log
-    for( std::vector<App::DocumentObjectExecReturn*>::iterator it=_RecomputeLog.begin();it!=_RecomputeLog.end();++it)
+    for (std::vector<App::DocumentObjectExecReturn*>::iterator it=_RecomputeLog.begin();it!=_RecomputeLog.end();++it)
         delete *it;
     _RecomputeLog.clear();
 
@@ -1708,7 +1872,7 @@ void Document::recompute()
     }
     catch (const std::exception& e) {
         std::cerr << "Document::recompute: " << e.what() << std::endl;
-        return;
+        return -1;
     }
 
     // caching vertex to DocObject
@@ -1781,8 +1945,9 @@ void Document::recompute()
             if ( _recomputeFeature(Cur)) {
                 // if somthing happen break execution of recompute
                 d->vertexMap.clear();
-                return;
+                return -1;
             }
+            ++objectCount;
         }
     }
 
@@ -1794,6 +1959,92 @@ void Document::recompute()
     d->vertexMap.clear();
 
     signalRecomputed(*this);
+    
+    return objectCount;
+}
+
+#else //ifdef USE_OLD_DAG
+
+int Document::recompute()
+{
+    int objectCount = 0;
+    // delete recompute log
+    for (auto LogEntry: _RecomputeLog)
+        delete LogEntry;
+    _RecomputeLog.clear();
+
+    // get the sorted vector of all objects in the document and go though it from the end
+    vector<DocumentObject*> topoSortedObjects = topologicalSort();
+
+    if (topoSortedObjects.size() != d->objectArray.size()){
+        cerr << "App::Document::recompute(): topological sort fails, invalid DAG!" << endl;
+        return -1;
+    }
+
+    for (auto objIt = topoSortedObjects.rbegin(); objIt != topoSortedObjects.rend(); ++objIt){
+        // ask the object if it should be recomputed
+        if ((*objIt)->mustExecute() == 1){
+            objectCount++;
+            if (_recomputeFeature(*objIt)) {
+                // if something happen break execution of recompute
+                return -1;
+            }
+            else{
+                (*objIt)->purgeTouched();
+                // set all dependent object touched to force recompute
+                for (auto inObjIt : (*objIt)->getInList())
+                    inObjIt->touch();
+            }
+        }
+
+    }
+#ifdef FC_DEBUG
+    // check if all objects are recalculated which were thouched 
+    for (auto objectIt : d->objectArray) {
+        if (objectIt->isTouched())
+            cerr << "Document::recompute(): " << objectIt->getNameInDocument() << " still touched after recompute" << endl;
+    }
+#endif
+
+        return objectCount;
+}
+
+#endif // USE_OLD_DAG
+
+std::vector<App::DocumentObject*> Document::topologicalSort() const
+{
+    // topological sort algorithm described here:
+    // https://de.wikipedia.org/wiki/Topologische_Sortierung#Algorithmus_f.C3.BCr_das_Topologische_Sortieren
+    vector < App::DocumentObject* > ret;
+    ret.reserve(d->objectArray.size());
+    map < App::DocumentObject*,int > countMap;
+
+    for (auto objectIt : d->objectArray)
+        countMap[objectIt] = objectIt->getInList().size();
+
+    auto rootObjeIt = find_if(countMap.begin(), countMap.end(), [](pair < App::DocumentObject*, int > count)->bool {
+        return count.second == 0;
+    });
+
+    if (rootObjeIt == countMap.end()){
+        cerr << "Document::topologicalSort: cyclic dependency detected (no root object)" << endl;
+        return ret;
+    }
+
+    while (rootObjeIt != countMap.end()){
+        rootObjeIt->second = rootObjeIt->second - 1;
+        for (auto outListIt : rootObjeIt->first->getOutList()){
+            auto outListMapIt = countMap.find(outListIt);
+            outListMapIt->second = outListMapIt->second - 1;
+        }
+        ret.push_back(rootObjeIt->first);
+
+        rootObjeIt = find_if(countMap.begin(), countMap.end(), [](pair < App::DocumentObject*, int > count)->bool {
+            return count.second == 0;
+        });
+    }
+
+    return ret;
 }
 
 const char * Document::getErrorDescription(const App::DocumentObject*Obj) const
@@ -2055,6 +2306,7 @@ void Document::remObject(const char* sName)
         signalTransactionRemove(*pos->second, 0);
     }
 
+#ifdef USE_OLD_DAG
     if (!d->vertexMap.empty()) {
         // recompute of document is running
         for (std::map<Vertex,DocumentObject*>::iterator it = d->vertexMap.begin(); it != d->vertexMap.end(); ++it) {
@@ -2064,12 +2316,13 @@ void Document::remObject(const char* sName)
             }
         }
     }
-
+#endif //USE_OLD_DAG
+    
     // Before deleting we must nullify all dependant objects
     breakDependency(pos->second, true);
 
     //and remove the tip if needed
-    if(Tip.getValue() && strcmp(Tip.getValue()->getNameInDocument(), sName)==0) {
+    if (Tip.getValue() && strcmp(Tip.getValue()->getNameInDocument(), sName)==0) {
         Tip.setValue(nullptr);
         TipName.setValue("");
     }
@@ -2127,12 +2380,15 @@ void Document::_remObject(DocumentObject* pcObject)
     }
 
     // do no transactions if we do a rollback!
-    if (!d->rollback) {
+    if (!d->rollback && d->activeUndoTransaction) {
         // Undo stuff
-        if (d->activeUndoTransaction) {
-            signalTransactionRemove(*pcObject, d->activeUndoTransaction);
-            d->activeUndoTransaction->addObjectNew(pcObject);
-        }
+        signalTransactionRemove(*pcObject, d->activeUndoTransaction);
+        d->activeUndoTransaction->addObjectNew(pcObject);
+    }
+    else {
+        // for a rollback delete the object
+        signalTransactionRemove(*pcObject, 0);
+        breakDependency(pcObject, true);
     }
 
     // remove from map
@@ -2143,6 +2399,11 @@ void Document::_remObject(DocumentObject* pcObject)
             d->objectArray.erase(it);
             break;
         }
+    }
+
+    // for a rollback delete the object
+    if (d->rollback) {
+        delete pcObject;
     }
 }
 
@@ -2307,11 +2568,12 @@ DocumentObject * Document::getObject(const char *Name) const
 }
 
 // Note: This method is only used in Tree.cpp slotChangeObject(), see explanation there
-const bool Document::isIn(const DocumentObject *pFeat) const
+bool Document::isIn(const DocumentObject *pFeat) const
 {
-    for (std::map<std::string,DocumentObject*>::const_iterator o = d->objectMap.begin(); o != d->objectMap.end(); o++)
+    for (std::map<std::string,DocumentObject*>::const_iterator o = d->objectMap.begin(); o != d->objectMap.end(); ++o) {
         if (o->second == pFeat)
             return true;
+    }
 
     return false;
 }
@@ -2320,9 +2582,10 @@ const char * Document::getObjectName(DocumentObject *pFeat) const
 {
     std::map<std::string,DocumentObject*>::const_iterator pos;
 
-    for (pos = d->objectMap.begin();pos != d->objectMap.end();++pos)
+    for (pos = d->objectMap.begin();pos != d->objectMap.end();++pos) {
         if (pos->second == pFeat)
             return pos->first.c_str();
+    }
 
     return 0;
 }
@@ -2344,7 +2607,7 @@ std::string Document::getUniqueObjectName(const char *Name) const
     else {
         // remove also trailing digits from clean name which is to avoid to create lengthy names
         // like 'Box001001'
-        if (!d->keepTrailingDigits) {
+        if (!testStatus(KeepTrailingDigits)) {
             std::string::size_type index = CleanName.find_last_not_of("0123456789");
             if (index+1 < CleanName.size()) {
                 CleanName = CleanName.substr(0,index+1);
@@ -2388,6 +2651,17 @@ std::vector<DocumentObject*> Document::getObjectsOfType(const Base::Type& typeId
     return Objects;
 }
 
+std::vector< DocumentObject* > Document::getObjectsWithExtension(const Base::Type& typeId) const {
+
+    std::vector<DocumentObject*> Objects;
+    for (std::vector<DocumentObject*>::const_iterator it = d->objectArray.begin(); it != d->objectArray.end(); ++it) {
+        if ((*it)->hasExtension(typeId))
+            Objects.push_back(*it);
+    }
+    return Objects;
+}
+
+
 std::vector<DocumentObject*> Document::findObjects(const Base::Type& typeId, const char* objname) const
 {
     boost::regex rx(objname);
@@ -2416,4 +2690,16 @@ int Document::countObjectsOfType(const Base::Type& typeId) const
 PyObject * Document::getPyObject(void)
 {
     return Py::new_reference_to(DocumentPythonObject);
+}
+
+std::vector<App::DocumentObject*> Document::getRootObjects() const
+{
+    std::vector < App::DocumentObject* > ret;
+
+    for (auto objectIt : d->objectArray) {
+        if (objectIt->getInList().empty())
+            ret.push_back(objectIt);
+    }
+
+    return ret;
 }

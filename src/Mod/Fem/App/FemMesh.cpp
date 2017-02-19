@@ -26,7 +26,6 @@
 #ifndef _PreComp_
 # include <cstdlib>
 # include <memory>
-# include <strstream>
 # include <Bnd_Box.hxx>
 # include <BRep_Tool.hxx>
 # include <BRepBndLib.hxx>
@@ -50,10 +49,18 @@
 #include <Mod/Mesh/App/Core/Iterator.h>
 
 #include "FemMesh.h"
+#ifdef FC_USE_VTK
+    #include "FemVTKTools.h"
+#endif
 
 #include <boost/assign/list_of.hpp>
 #include <SMESH_Gen.hxx>
 #include <SMESH_Mesh.hxx>
+#include <SMESH_MeshEditor.hxx>
+#include <SMESH_Group.hxx>
+#include <SMDS_MeshGroup.hxx>
+#include <SMESHDS_GroupBase.hxx>
+#include <SMESHDS_Group.hxx>
 #include <SMDS_PolyhedralVolumeOfNodes.hxx>
 #include <SMDS_VolumeTool.hxx>
 #include <StdMeshers_MaxLength.hxx>
@@ -110,7 +117,7 @@ FemMesh::~FemMesh()
 FemMesh &FemMesh::operator=(const FemMesh& mesh)
 {
     if (this != &mesh) {
-	myMesh = getGenerator()->CreateMesh(0,true);
+        myMesh = getGenerator()->CreateMesh(0,true);
         copyMeshData(mesh);
     }
     return *this;
@@ -120,8 +127,122 @@ void FemMesh::copyMeshData(const FemMesh& mesh)
 {
     _Mtrx = mesh._Mtrx;
 
+    // See file SMESH_I/SMESH_Gen_i.cxx in the git repo of smesh at https://git.salome-platform.org
+#if 1
+    // 1. Get source mesh
+    SMESHDS_Mesh* srcMeshDS = mesh.myMesh->GetMeshDS();
+
+    // 2. Get target mesh
+    SMESHDS_Mesh* newMeshDS = this->myMesh->GetMeshDS();
+    SMESH_MeshEditor editor(this->myMesh);
+
+    // 3. Get elements to copy
+    SMDS_ElemIteratorPtr srcElemIt; SMDS_NodeIteratorPtr srcNodeIt;
+    srcElemIt = srcMeshDS->elementsIterator();
+    srcNodeIt = srcMeshDS->nodesIterator();
+
+    // 4. Copy elements
+    int iN;
+    const SMDS_MeshNode *nSrc, *nTgt;
+    std::vector< const SMDS_MeshNode* > nodes;
+    while (srcElemIt->more()) {
+        const SMDS_MeshElement * elem = srcElemIt->next();
+        // find / add nodes
+        nodes.resize(elem->NbNodes());
+        SMDS_ElemIteratorPtr nIt = elem->nodesIterator();
+        for (iN = 0; nIt->more(); ++iN) {
+            nSrc = static_cast<const SMDS_MeshNode*>( nIt->next() );
+            nTgt = newMeshDS->FindNode( nSrc->GetID());
+            if (!nTgt)
+                nTgt = newMeshDS->AddNodeWithID( nSrc->X(), nSrc->Y(), nSrc->Z(), nSrc->GetID());
+            nodes[iN] = nTgt;
+        }
+
+        // add elements
+        if (elem->GetType() != SMDSAbs_Node) {
+            int ID = elem->GetID();
+            switch (elem->GetEntityType()) {
+            case SMDSEntity_Polyhedra:
+                editor.GetMeshDS()->
+                    AddPolyhedralVolumeWithID(nodes,
+                                              static_cast<const SMDS_VtkVolume*>(elem)->GetQuantities(),
+                                              ID);
+                break;
+            case SMDSEntity_Ball:
+            {
+                SMESH_MeshEditor::ElemFeatures elemFeat;
+                elemFeat.Init(static_cast<const SMDS_BallElement*>(elem)->GetDiameter());
+                elemFeat.SetID(ID);
+                editor.AddElement(nodes, elemFeat);
+                break;
+            }
+            default:
+                {
+                    SMESH_MeshEditor::ElemFeatures elemFeat(elem->GetType(), elem->IsPoly());
+                    elemFeat.SetID(ID);
+                    editor.AddElement(nodes, elemFeat);
+                    break;
+                }
+            }
+        }
+    }
+
+    // 4(b). Copy free nodes
+    if (srcNodeIt && srcMeshDS->NbNodes() != newMeshDS->NbNodes()) {
+        while (srcNodeIt->more()) {
+            nSrc = srcNodeIt->next();
+            if (nSrc->NbInverseElements() == 0) {
+                nTgt = newMeshDS->AddNodeWithID(nSrc->X(), nSrc->Y(), nSrc->Z(), nSrc->GetID());
+            }
+        }
+    }
+
+    // 5. Copy groups
+    SMESH_Mesh::GroupIteratorPtr gIt = mesh.myMesh->GetGroups();
+    while (gIt->more()) {
+        SMESH_Group* group = gIt->next();
+        const SMESHDS_GroupBase* groupDS = group->GetGroupDS();
+
+        // Check group type. We copy nodal groups containing nodes of copied element
+        SMDSAbs_ElementType groupType = groupDS->GetType();
+        if (groupType != SMDSAbs_Node && newMeshDS->GetMeshInfo().NbElements( groupType ) == 0)
+            continue; // group type differs from types of meshPart
+
+        // Find copied elements in the group
+        std::vector< const SMDS_MeshElement* > groupElems;
+        SMDS_ElemIteratorPtr eIt = groupDS->GetElements();
+        const SMDS_MeshElement* foundElem;
+        if (groupType == SMDSAbs_Node) {
+            while (eIt->more()) {
+                if ((foundElem = newMeshDS->FindNode( eIt->next()->GetID())))
+                    groupElems.push_back(foundElem);
+            }
+        }
+        else {
+            while (eIt->more())
+                if ((foundElem = newMeshDS->FindElement(eIt->next()->GetID())))
+                    groupElems.push_back(foundElem);
+        }
+
+        // Make a new group
+        if (!groupElems.empty()) {
+            int aId;
+            SMESH_Group* newGroupObj = this->myMesh->AddGroup(groupType, group->GetName(), aId);
+            SMESHDS_Group* newGroupDS = dynamic_cast<SMESHDS_Group*>(newGroupObj->GetGroupDS());
+            if (newGroupDS) {
+                SMDS_MeshGroup& smdsGroup = ((SMESHDS_Group*)newGroupDS)->SMDSGroup();
+                for (unsigned i = 0; i < groupElems.size(); ++i)
+                    smdsGroup.Add(groupElems[i]);
+            }
+        }
+    }
+
+    newMeshDS->Modified();
+
+#else
     SMESHDS_Mesh* meshds = this->myMesh->GetMeshDS();
 
+    // Some further information is still not copied: http://forum.freecadweb.org/viewtopic.php?f=18&t=18982#p148114
     SMDS_NodeIteratorPtr aNodeIter = mesh.myMesh->GetMeshDS()->nodesIterator();
     for (;aNodeIter->more();) {
         const SMDS_MeshNode* aNode = aNodeIter->next();
@@ -307,6 +428,47 @@ void FemMesh::copyMeshData(const FemMesh& mesh)
                 break;
         }
     }
+
+    // Copy groups
+    std::list<int> grpIds = mesh.myMesh->GetGroupIds();
+    for (auto it : grpIds) {
+        // group of source mesh
+        SMESH_Group* sourceGroup = mesh.myMesh->GetGroup(it);
+        SMESHDS_GroupBase* sourceGroupDS = sourceGroup->GetGroupDS();
+
+        int aId;
+        if (sourceGroupDS->GetType() == SMDSAbs_Node) {
+            SMESH_Group* targetGroup = this->myMesh->AddGroup(SMDSAbs_Node, sourceGroupDS->GetStoreName(), aId);
+            if (targetGroup) {
+                SMESHDS_Group* targetGroupDS = dynamic_cast<SMESHDS_Group*>(targetGroup->GetGroupDS());
+                if (targetGroupDS) {
+                    SMDS_ElemIteratorPtr aIter = sourceGroupDS->GetElements();
+                    while (aIter->more()) {
+                        const SMDS_MeshElement* aElem = aIter->next();
+                        const SMDS_MeshNode* aNode = meshds->FindNode(aElem->GetID());
+                        if (aNode)
+                            targetGroupDS->SMDSGroup().Add(aNode);
+                    }
+                }
+            }
+        }
+        else {
+            SMESH_Group* targetGroup = this->myMesh->AddGroup(sourceGroupDS->GetType(), sourceGroupDS->GetStoreName(), aId);
+            if (targetGroup) {
+                SMESHDS_Group* targetGroupDS = dynamic_cast<SMESHDS_Group*>(targetGroup->GetGroupDS());
+                if (targetGroupDS) {
+                    SMDS_ElemIteratorPtr aIter = sourceGroupDS->GetElements();
+                    while (aIter->more()) {
+                        const SMDS_MeshElement* aElem = aIter->next();
+                        const SMDS_MeshElement* aElement = meshds->FindElement(aElem->GetID());
+                        if (aElement)
+                            targetGroupDS->SMDSGroup().Add(aElement);
+                    }
+                }
+            }
+        }
+    }
+#endif
 }
 
 const SMESH_Mesh* FemMesh::getSMesh() const
@@ -318,7 +480,6 @@ SMESH_Mesh* FemMesh::getSMesh()
 {
     return myMesh;
 }
-
 
 SMESH_Gen * FemMesh::getGenerator()
 {
@@ -332,7 +493,7 @@ void FemMesh::addHypothesis(const TopoDS_Shape & aSubShape, SMESH_HypothesisPtr 
     hypoth.push_back(ptr);
 }
 
-void FemMesh::setStanardHypotheses()
+void FemMesh::setStandardHypotheses()
 {
     if (!hypoth.empty())
         return;
@@ -380,7 +541,7 @@ void FemMesh::compute()
     getGenerator()->Compute(*myMesh, myMesh->GetShapeToMesh());
 }
 
-std::set<long> FemMesh::getSurfaceNodes(long ElemId, short FaceId, float Angle) const
+std::set<long> FemMesh::getSurfaceNodes(long /*ElemId*/, short /*FaceId*/, float /*Angle*/) const
 {
     std::set<long> result;
     //const SMESHDS_Mesh* data = myMesh->GetMeshDS();
@@ -892,13 +1053,19 @@ void FemMesh::read(const char *FileName)
     }
     else if (File.hasExtension("dat") ) {
         // read brep-file
-	// vejmarie disable
+    // vejmarie disable
         myMesh->DATToMesh(File.filePath().c_str());
     }
     else if (File.hasExtension("bdf") ) {
         // read Nastran-file
         readNastran(File.filePath());
     }
+#ifdef FC_USE_VTK
+    else if (File.hasExtension("vtk") || File.hasExtension("vtu")) {
+        // read *.vtk legacy format or *.vtu XML unstructure Mesh
+        FemVTKTools::readVTKMesh(File.filePath().c_str(), this);
+    }
+#endif
     else{
         throw Base::Exception("Unknown extension");
     }
@@ -911,7 +1078,7 @@ void FemMesh::writeABAQUS(const std::string &Filename) const
     static std::map<int, std::string> faceTypeMap;
     static std::map<int, std::string> volTypeMap;
     if (elemOrderMap.empty()) {
-        // node order fits with node order in ccxFrdReader.py module to import CalculiX result meshes
+        // node order fits with node order in importCcxFrdResults.py module to import CalculiX result meshes
 
         // dimension 1
         //
@@ -1186,6 +1353,12 @@ void FemMesh::write(const char *FileName) const
         // write ABAQUS Output
         writeABAQUS(File.filePath());
     }
+#ifdef FC_USE_VTK
+    else if (File.hasExtension("vtk") || File.hasExtension("vtu") ) {
+        // write unstructure mesh to VTK format *.vtk and *.vtu
+        FemVTKTools::writeVTKMesh(File.filePath().c_str(), this);
+    }
+#endif
     else{
         throw Base::Exception("Unknown extension");
     }
@@ -1261,19 +1434,8 @@ void FemMesh::SaveDocFile (Base::Writer &writer) const
 
     Base::ifstream file(fi, std::ios::in | std::ios::binary);
     if (file){
-        unsigned long ulSize = 0;
         std::streambuf* buf = file.rdbuf();
-        if (buf) {
-            unsigned long ulCurr;
-            ulCurr = buf->pubseekoff(0, std::ios::cur, std::ios::in);
-            ulSize = buf->pubseekoff(0, std::ios::end, std::ios::in);
-            buf->pubseekoff(ulCurr, std::ios::beg, std::ios::in);
-        }
-
-        // read in the ASCII file and write back to the stream
-        std::strstreambuf sbuf(ulSize);
-        file >> &sbuf;
-        writer.Stream() << &sbuf;
+        writer.Stream() << buf;
     }
 
     file.close();
@@ -1353,12 +1515,12 @@ std::vector<const char*> FemMesh::getElementTypes(void) const
     return temp;
 }
 
-unsigned long FemMesh::countSubElements(const char* Type) const
+unsigned long FemMesh::countSubElements(const char* /*Type*/) const
 {
     return 0;
 }
 
-Data::Segment* FemMesh::getSubElement(const char* Type, unsigned long n) const
+Data::Segment* FemMesh::getSubElement(const char* /*Type*/, unsigned long /*n*/) const
 {
     // FIXME implement subelement interface
     //std::stringstream str;

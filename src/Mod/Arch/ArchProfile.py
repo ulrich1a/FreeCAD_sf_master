@@ -29,9 +29,21 @@ if FreeCAD.GuiUp:
     import FreeCADGui
     from PySide import QtCore, QtGui
     from DraftTools import translate
+    from PySide.QtCore import QT_TRANSLATE_NOOP
 else:
+    # \cond
     def translate(ctxt,txt):
         return txt
+    def QT_TRANSLATE_NOOP(ctxt,txt):
+        return txt
+    # \endcond
+
+## @package ArchProfile
+#  \ingroup ARCH
+#  \brief Profile tools for ArchStructure
+#
+#  This module provides tools to build base profiles
+#  for Arch Strucutre elements
 
 __title__="FreeCAD Profile"
 __author__ = "Yorik van Havre"
@@ -61,9 +73,9 @@ def readPresets():
                                 Presets.append(r)
                             bid=bid+1
                         except ValueError:
-                            print "Skipping bad line: "+str(row)
+                            print("Skipping bad line: "+str(row))
             except IOError:
-                print "Could not open ",profilefile
+                print("Could not open ",profilefile)
     return Presets
 
 def makeProfile(profile=[0,'REC','REC100x100','R',100,100]):
@@ -81,7 +93,7 @@ def makeProfile(profile=[0,'REC','REC100x100','R',100,100]):
     elif profile[3]=="U":
         _ProfileU(obj, profile)
     else :
-        print "Profile not supported"
+        print("Profile not supported")
     if FreeCAD.GuiUp:
         Draft._ViewProviderDraft(obj.ViewObject)
     return obj
@@ -98,8 +110,8 @@ class _ProfileC(_Profile):
     '''A parametric circular tubeprofile. Profile data: [Outside diameter, Inside diameter]'''
 
     def __init__(self,obj, profile):
-        obj.addProperty("App::PropertyLength","OutDiameter","Draft","Outside Diameter").OutDiameter = profile[4]
-        obj.addProperty("App::PropertyLength","Thickness","Draft","Wall thickness").Thickness = profile[5]
+        obj.addProperty("App::PropertyLength","OutDiameter","Draft",QT_TRANSLATE_NOOP("App::Property","Outside Diameter")).OutDiameter = profile[4]
+        obj.addProperty("App::PropertyLength","Thickness","Draft",QT_TRANSLATE_NOOP("App::Property","Wall thickness")).Thickness = profile[5]
         _Profile.__init__(self,obj,profile)
 
     def execute(self,obj):
@@ -118,10 +130,10 @@ class _ProfileH(_Profile):
     '''A parametric H or I beam profile. Profile data: [width, height, web thickness, flange thickness] (see http://en.wikipedia.org/wiki/I-beam for reference)'''
 
     def __init__(self,obj, profile):
-        obj.addProperty("App::PropertyLength","Width","Draft","Width of the beam").Width = profile[4]
-        obj.addProperty("App::PropertyLength","Height","Draft","Height of the beam").Height = profile[5]
-        obj.addProperty("App::PropertyLength","WebThickness","Draft","Thickness of the web").WebThickness = profile[6]
-        obj.addProperty("App::PropertyLength","FlangeThickness","Draft","Thickness of the flanges").FlangeThickness = profile[7]
+        obj.addProperty("App::PropertyLength","Width","Draft",QT_TRANSLATE_NOOP("App::Property","Width of the beam")).Width = profile[4]
+        obj.addProperty("App::PropertyLength","Height","Draft",QT_TRANSLATE_NOOP("App::Property","Height of the beam")).Height = profile[5]
+        obj.addProperty("App::PropertyLength","WebThickness","Draft",QT_TRANSLATE_NOOP("App::Property","Thickness of the web")).WebThickness = profile[6]
+        obj.addProperty("App::PropertyLength","FlangeThickness","Draft",QT_TRANSLATE_NOOP("App::Property","Thickness of the flanges")).FlangeThickness = profile[7]
         _Profile.__init__(self,obj,profile)
 
     def execute(self,obj):
@@ -148,8 +160,8 @@ class _ProfileR(_Profile):
     '''A parametric rectangular beam profile based on [Width, Height]'''
 
     def __init__(self,obj, profile):
-        obj.addProperty("App::PropertyLength","Width","Draft","Width of the beam").Width = profile[4]
-        obj.addProperty("App::PropertyLength","Height","Draft","Height of the beam").Height = profile[5]
+        obj.addProperty("App::PropertyLength","Width","Draft",QT_TRANSLATE_NOOP("App::Property","Width of the beam")).Width = profile[4]
+        obj.addProperty("App::PropertyLength","Height","Draft",QT_TRANSLATE_NOOP("App::Property","Height of the beam")).Height = profile[5]
         _Profile.__init__(self,obj,profile)
 
     def execute(self,obj):
@@ -168,9 +180,9 @@ class _ProfileRH(_Profile):
     '''A parametric Rectangular hollow beam profile. Profile data: [width, height, thickness]'''
 
     def __init__(self,obj, profile):
-        obj.addProperty("App::PropertyLength","Width","Draft","Width of the beam").Width = profile[4]
-        obj.addProperty("App::PropertyLength","Height","Draft","Height of the beam").Height = profile[5]
-        obj.addProperty("App::PropertyLength","Thickness","Draft","Thickness of the sides").Thickness = profile[6]
+        obj.addProperty("App::PropertyLength","Width","Draft",QT_TRANSLATE_NOOP("App::Property","Width of the beam")).Width = profile[4]
+        obj.addProperty("App::PropertyLength","Height","Draft",QT_TRANSLATE_NOOP("App::Property","Height of the beam")).Height = profile[5]
+        obj.addProperty("App::PropertyLength","Thickness","Draft",QT_TRANSLATE_NOOP("App::Property","Thickness of the sides")).Thickness = profile[6]
         _Profile.__init__(self,obj,profile)
 
     def execute(self,obj):
@@ -194,10 +206,10 @@ class _ProfileU(_Profile):
     '''A parametric H or I beam profile. Profile data: [width, height, web thickness, flange thickness] (see  http://en.wikipedia.org/wiki/I-beam forreference)'''
 
     def __init__(self,obj, profile):
-        obj.addProperty("App::PropertyLength","Width","Draft","Width of the beam").Width = profile[4]
-        obj.addProperty("App::PropertyLength","Height","Draft","Height of the beam").Height = profile[5]
-        obj.addProperty("App::PropertyLength","WebThickness","Draft","Thickness of the webs").WebThickness = profile[6]
-        obj.addProperty("App::PropertyLength","FlangeThickness","Draft","Thickness of the flange").FlangeThickness = profile[7]
+        obj.addProperty("App::PropertyLength","Width","Draft",QT_TRANSLATE_NOOP("App::Property","Width of the beam")).Width = profile[4]
+        obj.addProperty("App::PropertyLength","Height","Draft",QT_TRANSLATE_NOOP("App::Property","Height of the beam")).Height = profile[5]
+        obj.addProperty("App::PropertyLength","WebThickness","Draft",QT_TRANSLATE_NOOP("App::Property","Thickness of the webs")).WebThickness = profile[6]
+        obj.addProperty("App::PropertyLength","FlangeThickness","Draft",QT_TRANSLATE_NOOP("App::Property","Thickness of the flange")).FlangeThickness = profile[7]
         _Profile.__init__(self,obj,profile)
 
     def execute(self,obj):

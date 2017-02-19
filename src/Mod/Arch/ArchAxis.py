@@ -28,13 +28,25 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from DraftTools import translate
     from pivy import coin
+    from PySide.QtCore import QT_TRANSLATE_NOOP
 else:
+    # \cond
     def translate(ctxt,txt):
         return txt
+    def QT_TRANSLATE_NOOP(ctxt,txt):
+        return txt
+    # \endcond
 
 __title__="FreeCAD Axis System"
 __author__ = "Yorik van Havre"
 __url__ = "http://www.freecadweb.org"
+
+## @package ArchAxis
+#  \ingroup ARCH
+#  \brief Axis system for the Arch workbench
+#
+#  This module provides tools to build axis systems
+#  An axis system is a collection of planar axes with a number/tag
 
 def makeAxis(num=5,size=1000,name="Axes"):
     '''makeAxis(num,size): makes an Axis System
@@ -59,9 +71,9 @@ class _CommandAxis:
     "the Arch Axis command definition"
     def GetResources(self):
         return {'Pixmap'  : 'Arch_Axis',
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("Arch_Axis","Axis"),
+                'MenuText': QT_TRANSLATE_NOOP("Arch_Axis","Axis"),
                 'Accel': "A, X",
-                'ToolTip': QtCore.QT_TRANSLATE_NOOP("Arch_Axis","Creates an axis system.")}
+                'ToolTip': QT_TRANSLATE_NOOP("Arch_Axis","Creates an axis system.")}
 
     def Activated(self):
         FreeCAD.ActiveDocument.openTransaction(translate("Arch","Create Axis"))
@@ -81,9 +93,9 @@ class _CommandAxis:
 class _Axis:
     "The Axis object"
     def __init__(self,obj):
-        obj.addProperty("App::PropertyFloatList","Distances","Arch", "The intervals between axes")
-        obj.addProperty("App::PropertyFloatList","Angles","Arch", "The angles of each axis")
-        obj.addProperty("App::PropertyLength","Length","Arch", "The length of the axes")
+        obj.addProperty("App::PropertyFloatList","Distances","Arch", QT_TRANSLATE_NOOP("App::Property","The intervals between axes"))
+        obj.addProperty("App::PropertyFloatList","Angles","Arch", QT_TRANSLATE_NOOP("App::Property","The angles of each axis"))
+        obj.addProperty("App::PropertyLength","Length","Arch", QT_TRANSLATE_NOOP("App::Property","The length of the axes"))
         obj.addProperty("App::PropertyPlacement","Placement","Base","")
         obj.addProperty("Part::PropertyPartShape","Shape","Base","")
         self.Type = "Axis"
@@ -105,7 +117,7 @@ class _Axis:
                     ang = math.radians(obj.Angles[i])
                     p1 = Vector(dist,0,0)
                     p2 = Vector(dist+(l/math.cos(ang))*math.sin(ang),l,0)
-                    geoms.append(Part.Line(p1,p2).toShape())
+                    geoms.append(Part.LineSegment(p1,p2).toShape())
         if geoms:
             sh = Part.Compound(geoms)
             sh.Placement = obj.Placement
@@ -126,8 +138,8 @@ class _ViewProviderAxis:
     "A View Provider for the Axis object"
 
     def __init__(self,vobj):
-        vobj.addProperty("App::PropertyLength","BubbleSize","Arch", "The size of the axis bubbles")
-        vobj.addProperty("App::PropertyEnumeration","NumberingStyle","Arch", "The numbering style")
+        vobj.addProperty("App::PropertyLength","BubbleSize","Arch", QT_TRANSLATE_NOOP("App::Property","The size of the axis bubbles"))
+        vobj.addProperty("App::PropertyEnumeration","NumberingStyle","Arch", QT_TRANSLATE_NOOP("App::Property","The numbering style"))
         vobj.addProperty("App::PropertyEnumeration","DrawStyle","Base","")
         vobj.addProperty("App::PropertyEnumeration","BubblePosition","Base","")
         vobj.addProperty("App::PropertyFloat","LineWidth","Base","")
@@ -487,13 +499,13 @@ class _AxisTaskPanel:
         return True
 
     def retranslateUi(self, TaskPanel):
-        TaskPanel.setWindowTitle(QtGui.QApplication.translate("Arch", "Axes", None, QtGui.QApplication.UnicodeUTF8))
-        self.delButton.setText(QtGui.QApplication.translate("Arch", "Remove", None, QtGui.QApplication.UnicodeUTF8))
-        self.addButton.setText(QtGui.QApplication.translate("Arch", "Add", None, QtGui.QApplication.UnicodeUTF8))
-        self.title.setText(QtGui.QApplication.translate("Arch", "Distances (mm) and angles (deg) between axes", None, QtGui.QApplication.UnicodeUTF8))
-        self.tree.setHeaderLabels([QtGui.QApplication.translate("Arch", "Axis", None, QtGui.QApplication.UnicodeUTF8),
-                                   QtGui.QApplication.translate("Arch", "Distance", None, QtGui.QApplication.UnicodeUTF8),
-                                   QtGui.QApplication.translate("Arch", "Angle", None, QtGui.QApplication.UnicodeUTF8)])
+        TaskPanel.setWindowTitle(QtGui.QApplication.translate("Arch", "Axes", None))
+        self.delButton.setText(QtGui.QApplication.translate("Arch", "Remove", None))
+        self.addButton.setText(QtGui.QApplication.translate("Arch", "Add", None))
+        self.title.setText(QtGui.QApplication.translate("Arch", "Distances (mm) and angles (deg) between axes", None))
+        self.tree.setHeaderLabels([QtGui.QApplication.translate("Arch", "Axis", None),
+                                   QtGui.QApplication.translate("Arch", "Distance", None),
+                                   QtGui.QApplication.translate("Arch", "Angle", None)])
 
 if FreeCAD.GuiUp:
     FreeCADGui.addCommand('Arch_Axis',_CommandAxis())

@@ -268,7 +268,7 @@ void NumberExpression::negate()
 std::string NumberExpression::toString() const
 {
     std::stringstream s;
-    s << std::setprecision(std::numeric_limits<double>::digits10 + 1) << quantity.getValue();
+    s << std::setprecision(std::numeric_limits<double>::digits10 + 2) << quantity.getValue();
 
     /* Trim of any extra spaces */
     //while (s.size() > 0 && s[s.size() - 1] == ' ')
@@ -340,9 +340,9 @@ static bool definitelyLessThan(double a, double b, double epsilon)
 
 Expression * OperatorExpression::eval() const
 {
-    std::auto_ptr<Expression> e1(left->eval());
+    std::unique_ptr<Expression> e1(left->eval());
     NumberExpression * v1;
-    std::auto_ptr<Expression> e2(right->eval());
+    std::unique_ptr<Expression> e2(right->eval());
     NumberExpression * v2;
     Expression * output;
     const double epsilon = std::numeric_limits<double>::epsilon();
@@ -455,17 +455,6 @@ std::string OperatorExpression::toString() const
     bool needsParens;
     Operator leftOperator(NONE), rightOperator(NONE);
 
-    switch (op) {
-    case NEG:
-        s << "-" << left->toString();
-        return s.str();
-    case POS:
-        s << "+" << left->toString();
-        return s.str();
-    default:
-        break;
-    }
-
     needsParens = false;
     if (freecad_dynamic_cast<OperatorExpression>(left))
         leftOperator = static_cast<OperatorExpression*>(left)->op;
@@ -476,6 +465,17 @@ std::string OperatorExpression::toString() const
             needsParens = true;
         //else if (!isCommutative())
         //    needsParens = true;
+    }
+
+    switch (op) {
+    case NEG:
+        s << "-" << (needsParens ? "(" : "") << left->toString() << (needsParens ? ")" : "");
+        return s.str();
+    case POS:
+        s << "+" << (needsParens ? "(" : "") << left->toString() << (needsParens ? ")" : "");
+        return s.str();
+    default:
+        break;
     }
 
     if (needsParens)
@@ -532,6 +532,10 @@ std::string OperatorExpression::toString() const
         if (!isRightAssociative())
             needsParens = true;
         else if (!isCommutative())
+            needsParens = true;
+    }
+    else if (right->priority() == priority()) {
+        if (!isRightAssociative())
             needsParens = true;
     }
 
@@ -677,9 +681,6 @@ FunctionExpression::FunctionExpression(const DocumentObject *_owner, Function _f
             throw ExpressionError("Invalid number of arguments: eaxctly two required.");
         break;
     case STDDEV:
-        if (args.size() < 2)
-            throw ExpressionError("Invalid number of arguments: at least two required.");
-        break;
     case SUM:
     case AVERAGE:
     case COUNT:
@@ -732,7 +733,7 @@ public:
     Collector() : first(true) { }
     virtual void collect(Quantity value) {
         if (first)
-            value.setUnit(value.getUnit());
+            q.setUnit(value.getUnit());
     }
     virtual Quantity getQuantity() const {
         return q;
@@ -773,12 +774,12 @@ private:
 
 class StdDevCollector : public Collector {
 public:
-    StdDevCollector() : Collector() { }
+    StdDevCollector() : Collector(), n(0) { }
 
     void collect(Quantity value) {
         Collector::collect(value);
         if (first) {
-            M2 = Quantity(0, value.getUnit());
+            M2 = Quantity(0, value.getUnit() * value.getUnit());
             mean = Quantity(0, value.getUnit());
             n = 0;
         }
@@ -792,9 +793,9 @@ public:
 
     virtual Quantity getQuantity() const {
         if (n < 2)
-            return Quantity();
+            throw ExpressionError("Invalid number of entries: at least two required.");
         else
-            return (M2 / (n - 1.0)).pow(Quantity(0.5));
+            return Quantity((M2 / (n - 1.0)).pow(Quantity(0.5)).getValue(), mean.getUnit());
     }
 
 private:
@@ -813,7 +814,7 @@ public:
         first = false;
     }
 
-    virtual Quantity getQuantity() const { return n; }
+    virtual Quantity getQuantity() const { return Quantity(n); }
 
 private:
     unsigned int n;
@@ -886,13 +887,13 @@ Expression * FunctionExpression::evalAggregate() const
                 if ((qp = freecad_dynamic_cast<PropertyQuantity>(p)) != 0)
                     c->collect(qp->getQuantityValue());
                 else if ((fp = freecad_dynamic_cast<PropertyFloat>(p)) != 0)
-                    c->collect(fp->getValue());
+                    c->collect(Quantity(fp->getValue()));
                 else
                     throw Exception("Invalid property type for aggregate");
             } while (range.next());
         }
         else if (args[i]->isDerivedFrom(App::VariableExpression::getClassTypeId())) {
-            std::auto_ptr<Expression> e(args[i]->eval());
+            std::unique_ptr<Expression> e(args[i]->eval());
             NumberExpression * n(freecad_dynamic_cast<NumberExpression>(e.get()));
 
             if (n)
@@ -919,8 +920,8 @@ Expression * FunctionExpression::eval() const
     if (f > AGGREGATES)
         return evalAggregate();
 
-    std::auto_ptr<Expression> e1(args[0]->eval());
-    std::auto_ptr<Expression> e2(args.size() > 1 ? args[1]->eval() : 0);
+    std::unique_ptr<Expression> e1(args[0]->eval());
+    std::unique_ptr<Expression> e2(args.size() > 1 ? args[1]->eval() : 0);
     NumberExpression * v1 = freecad_dynamic_cast<NumberExpression>(e1.get());
     NumberExpression * v2 = freecad_dynamic_cast<NumberExpression>(e2.get());
     double output;
@@ -1115,39 +1116,29 @@ Expression * FunctionExpression::eval() const
 
 Expression *FunctionExpression::simplify() const
 {
-    Expression * v1 = args[0]->simplify();
+    size_t numerics = 0;
+    std::vector<Expression*> a;
 
-    // Argument simplified to numeric expression? Then return evaluate and return
-    if (freecad_dynamic_cast<NumberExpression>(v1)) {
-        switch (f) {
-        case ATAN2:
-        case MOD:
-        case POW: {
-            Expression * v2 = args[1]->simplify();
+    // Try to simplify each argument to function
+    for (auto it = args.begin(); it != args.end(); ++it) {
+        Expression * v = (*it)->simplify();
 
-            if (freecad_dynamic_cast<NumberExpression>(v2)) {
-                delete v1;
-                delete v2;
-                return eval();
-            }
-            else {
-                std::vector<Expression*> a;
-                a.push_back(v1);
-                a.push_back(v2);
-                return new FunctionExpression(owner, f, a);
-            }
-        }
-        default:
-            break;
-        }
-        delete v1;
+        if (freecad_dynamic_cast<NumberExpression>(v))
+            ++numerics;
+        a.push_back(v);
+    }
+
+    if (numerics == args.size()) {
+        // All constants, then evaluation must also be constant
+
+        // Clean-up
+        for (auto it = args.begin(); it != args.end(); ++it)
+            delete *it;
+
         return eval();
     }
-    else {
-        std::vector<Expression*> a;
-        a.push_back(v1);
+    else
         return new FunctionExpression(owner, f, a);
-    }
 }
 
 /**
@@ -1358,27 +1349,27 @@ Expression * VariableExpression::eval() const
     else if (value.type() == typeid(double)) {
         double dvalue = boost::any_cast<double>(value);
 
-        return new NumberExpression(owner, dvalue);
+        return new NumberExpression(owner, Quantity(dvalue));
     }
     else if (value.type() == typeid(float)) {
         double fvalue = boost::any_cast<float>(value);
 
-        return new NumberExpression(owner, fvalue);
+        return new NumberExpression(owner, Quantity(fvalue));
     }
     else if (value.type() == typeid(int)) {
         int ivalue = boost::any_cast<int>(value);
 
-        return new NumberExpression(owner, ivalue);
+        return new NumberExpression(owner, Quantity(ivalue));
     }
     else if (value.type() == typeid(long)) {
         long lvalue = boost::any_cast<long>(value);
 
-        return new NumberExpression(owner, lvalue);
+        return new NumberExpression(owner, Quantity(lvalue));
     }
     else if (value.type() == typeid(bool)) {
         double bvalue = boost::any_cast<bool>(value) ? 1.0 : 0.0;
 
-        return new NumberExpression(owner, bvalue);
+        return new NumberExpression(owner, Quantity(bvalue));
     }
     else if (value.type() == typeid(std::string)) {
         std::string svalue = boost::any_cast<std::string>(value);
@@ -1537,7 +1528,7 @@ bool ConditionalExpression::isTouched() const
 
 Expression *ConditionalExpression::eval() const
 {
-    std::auto_ptr<Expression> e(condition->eval());
+    std::unique_ptr<Expression> e(condition->eval());
     NumberExpression * v = freecad_dynamic_cast<NumberExpression>(e.get());
 
     if (v == 0)
@@ -1551,7 +1542,7 @@ Expression *ConditionalExpression::eval() const
 
 Expression *ConditionalExpression::simplify() const
 {
-    std::auto_ptr<Expression> e(condition->simplify());
+    std::unique_ptr<Expression> e(condition->simplify());
     NumberExpression * v = freecad_dynamic_cast<NumberExpression>(e.get());
 
     if (v == 0)
@@ -1619,7 +1610,7 @@ int ConstantExpression::priority() const
 TYPESYSTEM_SOURCE_ABSTRACT(App::BooleanExpression, App::NumberExpression);
 
 BooleanExpression::BooleanExpression(const DocumentObject *_owner, bool _value)
-    : NumberExpression(owner, _value ? 1.0 : 0.0)
+    : NumberExpression(_owner, Quantity(_value ? 1.0 : 0.0))
 {
 }
 
@@ -1699,6 +1690,7 @@ namespace ExpressionParser {
 
 void ExpressionParser_yyerror(const char *errorinfo)
 {
+    (void)errorinfo;
 }
 
 /* helper function for tuning number strings with groups in a locale agnostic way... */
@@ -1749,7 +1741,20 @@ int ExpressionParserlex(void);
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 // Scanner, defined in ExpressionParser.l
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wsign-compare"
+# pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#elif defined (__GNUC__)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wsign-compare"
+#endif
 #include "lex.ExpressionParser.c"
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#elif defined (__GNUC__)
+# pragma GCC diagnostic pop
+#endif
 #endif // DOXYGEN_SHOULD_SKIP_THIS
 #ifdef _MSC_VER
 # define strdup _strdup

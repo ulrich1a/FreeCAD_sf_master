@@ -249,6 +249,10 @@ ViewProviderMesh::ViewProviderMesh() : pcOpenEdge(0)
     if (pcHighlight->selectionMode.getValue() == Gui::SoFCSelection::SEL_OFF)
         Selectable.setValue(false);
 
+    pcShapeGroup = new SoGroup();
+    pcShapeGroup->ref();
+    pcHighlight->addChild(pcShapeGroup);
+
     pOpenColor = new SoBaseColor();
     setOpenEdgeColorFrom(ShapeColor.getValue());
     pOpenColor->ref();
@@ -317,6 +321,7 @@ ViewProviderMesh::ViewProviderMesh() : pcOpenEdge(0)
 ViewProviderMesh::~ViewProviderMesh()
 {
     pcHighlight->unref();
+    pcShapeGroup->unref();
     pOpenColor->unref();
     pcLineStyle->unref();
     pcPointStyle->unref();
@@ -423,7 +428,10 @@ void ViewProviderMesh::attach(App::DocumentObject *pcFeat)
     // points
     SoGroup* pcPointRoot = new SoGroup();
     pcPointRoot->addChild(pcPointStyle);
-    pcPointRoot->addChild(pcFlatRoot);
+    pcPointRoot->addChild(pShapeHints);
+    pcPointRoot->addChild(pcShapeMaterial);
+    pcPointRoot->addChild(pcMatBinding);
+    pcPointRoot->addChild(pcHighlight);
     addDisplayMaskMode(pcPointRoot, "Point");
 
     // wires
@@ -440,12 +448,6 @@ void ViewProviderMesh::attach(App::DocumentObject *pcFeat)
     addDisplayMaskMode(pcWireRoot, "Wireframe");
 
     // faces+wires
-    Gui::SoFCSelection* selGroup = Gui::ViewProviderBuilder::createSelection();
-    selGroup->objectName = getObject()->getNameInDocument();
-    selGroup->documentName = getObject()->getDocument()->getName();
-    selGroup->subElementName = "Main";
-    selGroup->addChild(getShapeNode());
-
     // Avoid any Z-buffer artefacts, so that the lines always
     // appear on top of the faces
     SoPolygonOffset* offset = new SoPolygonOffset();
@@ -453,20 +455,20 @@ void ViewProviderMesh::attach(App::DocumentObject *pcFeat)
     offset->factor = 1.0f;
     offset->units = 1.0f;
 
+    SoSeparator* pcWireSep = new SoSeparator();
+    pcWireSep->addChild(pcLineStyle);
+    pcWireSep->addChild(pcLightModel);
+    pcWireSep->addChild(binding);
+    pcWireSep->addChild(pLineColor);
+    pcWireSep->addChild(pcHighlight);
+
     SoGroup* pcFlatWireRoot = new SoGroup();
-    pcFlatWireRoot->addChild(getCoordNode());
-    SoSeparator* sep = new SoSeparator();
-    sep->addChild(pcLineStyle);
-    sep->addChild(pcLightModel);
-    sep->addChild(binding);
-    sep->addChild(pLineColor);
-    sep->addChild(selGroup);
-    pcFlatWireRoot->addChild(sep);
+    pcFlatWireRoot->addChild(pcWireSep);
     pcFlatWireRoot->addChild(offset);
     pcFlatWireRoot->addChild(pShapeHints);
     pcFlatWireRoot->addChild(pcShapeMaterial);
     pcFlatWireRoot->addChild(pcMatBinding);
-    pcFlatWireRoot->addChild(getShapeNode());
+    pcFlatWireRoot->addChild(pcShapeGroup);
     addDisplayMaskMode(pcFlatWireRoot, "FlatWireframe");
 
     if (getColorProperty()) {
@@ -665,6 +667,35 @@ bool ViewProviderMesh::exportToVrml(const char* filename, const MeshCore::Materi
     return false;
 }
 
+void ViewProviderMesh::exportMesh(const char* filename, const char* fmt) const
+{
+    MeshCore::MeshIO::Format format = MeshCore::MeshIO::Undefined;
+    if (fmt) {
+        std::string dummy = "meshfile.";
+        dummy += fmt;
+        format = MeshCore::MeshOutput::GetFormat(dummy.c_str());
+    }
+
+    MeshCore::Material mat;
+    int numColors = pcShapeMaterial->diffuseColor.getNum();
+    const SbColor* colors = pcShapeMaterial->diffuseColor.getValues(0);
+    mat.diffuseColor.reserve(numColors);
+    for (int i=0; i<numColors; i++) {
+        const SbColor& c = colors[i];
+        mat.diffuseColor.push_back(App::Color(c[0], c[1], c[2]));
+    }
+
+    const Mesh::MeshObject& mesh = static_cast<Mesh::Feature*>(getObject())->Mesh.getValue();
+    if (mat.diffuseColor.size() == mesh.countPoints())
+        mat.binding = MeshCore::MeshIO::PER_VERTEX;
+    else if (mat.diffuseColor.size() == mesh.countFacets())
+        mat.binding = MeshCore::MeshIO::PER_FACE;
+    else
+        mat.binding = MeshCore::MeshIO::OVERALL;
+
+    mesh.save(filename, format, &mat, getObject()->Label.getValue());
+}
+
 void ViewProviderMesh::setupContextMenu(QMenu* menu, QObject* receiver, const char* member)
 {
     ViewProviderGeometryObject::setupContextMenu(menu, receiver, member);
@@ -778,6 +809,7 @@ bool ViewProviderMesh::createToolMesh(const std::vector<SbVec2f>& rclPoly, const
 
 void ViewProviderMesh::showOpenEdges(bool show)
 {
+    (void)show;
 }
 
 void ViewProviderMesh::clipMeshCallback(void * ud, SoEventCallback * n)
@@ -1028,10 +1060,10 @@ void ViewProviderMesh::getFacetsFromPolygon(const std::vector<SbVec2f>& picked,
                                             std::vector<unsigned long>& indices) const
 {
 #if 1
-    bool ok = true;
-    Base::Polygon2D polygon;
+    const bool ok = true;
+    Base::Polygon2d polygon;
     for (std::vector<SbVec2f>::const_iterator it = picked.begin(); it != picked.end(); ++it)
-        polygon.Add(Base::Vector2D((*it)[0],(*it)[1]));
+        polygon.Add(Base::Vector2d((*it)[0],(*it)[1]));
 
     // Get the attached mesh property
     Mesh::PropertyMeshKernel& meshProp = static_cast<Mesh::Feature*>(pcObject)->Mesh;
@@ -1259,9 +1291,9 @@ void ViewProviderMesh::trimMesh(const std::vector<SbVec2f>& polygon,
 {
     Mesh::MeshObject* mesh = static_cast<Mesh::Feature*>(pcObject)->Mesh.startEditing();
 
-    Base::Polygon2D polygon2d;
+    Base::Polygon2d polygon2d;
     for (std::vector<SbVec2f>::const_iterator it = polygon.begin(); it != polygon.end(); ++it)
-        polygon2d.Add(Base::Vector2D((*it)[0],(*it)[1]));
+        polygon2d.Add(Base::Vector2d((*it)[0],(*it)[1]));
 
     Mesh::MeshObject::CutType type = inner ?
         Mesh::MeshObject::INNER :
@@ -1884,12 +1916,45 @@ void ViewProviderMesh::highlightComponents()
     pcShapeMaterial->diffuseColor.finishEditing();
 }
 
+void ViewProviderMesh::highlightSegments(const std::vector<App::Color>& colors)
+{
+    const Mesh::MeshObject& rMesh = static_cast<Mesh::Feature*>(pcObject)->Mesh.getValue();
+    unsigned long numSegm = rMesh.countSegments();
+    if (numSegm == colors.size()) {
+        // Colorize the components
+        pcMatBinding->value = SoMaterialBinding::PER_FACE;
+        int uCtFacets = (int)rMesh.countFacets();
+
+        pcShapeMaterial->diffuseColor.setNum(uCtFacets);
+        SbColor* cols = pcShapeMaterial->diffuseColor.startEditing();
+        for (unsigned long i=0; i<numSegm; i++) {
+            std::vector<unsigned long> segm = rMesh.getSegment(i).getIndices();
+            float fRed = colors[i].r;
+            float fGrn = colors[i].g;
+            float fBlu = colors[i].b;
+            for (std::vector<unsigned long>::iterator it = segm.begin(); it != segm.end(); ++it) {
+                cols[*it].setValue(fRed,fGrn,fBlu);
+            }
+        }
+        pcShapeMaterial->diffuseColor.finishEditing();
+    }
+    else if (colors.size() == 1) {
+        pcMatBinding->value = SoMaterialBinding::OVERALL;
+        float fRed = colors[0].r;
+        float fGrn = colors[0].g;
+        float fBlu = colors[0].b;
+        pcShapeMaterial->diffuseColor.setValue(fRed,fGrn,fBlu);
+    }
+}
+
 // ------------------------------------------------------
 
 PROPERTY_SOURCE(MeshGui::ViewProviderIndexedFaceSet, MeshGui::ViewProviderMesh)
 
 ViewProviderIndexedFaceSet::ViewProviderIndexedFaceSet()
 {
+    pcMeshCoord = 0;
+    pcMeshFaces = 0;
 }
 
 ViewProviderIndexedFaceSet::~ViewProviderIndexedFaceSet()
@@ -1979,6 +2044,8 @@ PROPERTY_SOURCE(MeshGui::ViewProviderMeshObject, MeshGui::ViewProviderMesh)
 
 ViewProviderMeshObject::ViewProviderMeshObject()
 {
+    pcMeshNode = 0;
+    pcMeshShape = 0;
 }
 
 ViewProviderMeshObject::~ViewProviderMeshObject()

@@ -56,6 +56,8 @@
 #include "FemConstraintInitialTemperature.h"
 #include "FemConstraintPlaneRotation.h"
 #include "FemConstraintContact.h"
+#include "FemConstraintFluidBoundary.h"
+#include "FemConstraintTransform.h"
 
 #include "FemResultObject.h"
 #include "FemSolverObject.h"
@@ -72,7 +74,7 @@ extern PyObject* initModule();
 }
 
 /* Python entry */
-PyMODINIT_FUNC initFem()
+PyMOD_INIT_FUNC(Fem)
 {
     // load dependend module
     try {
@@ -81,7 +83,7 @@ PyMODINIT_FUNC initFem()
     }
     catch(const Base::Exception& e) {
         PyErr_SetString(PyExc_ImportError, e.what());
-        return;
+        PyMOD_Return(0);
     }
     PyObject* femModule = Fem::initModule();
     Base::Console().Log("Loading Fem module... done\n");
@@ -134,6 +136,7 @@ PyMODINIT_FUNC initFem()
     Fem::FeaturePython              ::init();
     Fem::FemMesh                    ::init();
     Fem::FemMeshObject              ::init();
+    Fem::FemMeshObjectPython        ::init();
     Fem::FemMeshShapeObject         ::init();
     Fem::FemMeshShapeNetgenObject   ::init();
     Fem::PropertyFemMesh            ::init();
@@ -157,8 +160,11 @@ PyMODINIT_FUNC initFem()
     Fem::ConstraintInitialTemperature ::init();
     Fem::ConstraintPlaneRotation    ::init();
     Fem::ConstraintContact          ::init();
+    Fem::ConstraintFluidBoundary    ::init();
+    Fem::ConstraintTransform        ::init();
 
     Fem::FemResultObject            ::init();
+    Fem::FemResultObjectPython      ::init();
     Fem::FemSolverObject            ::init();
     Fem::FemSolverObjectPython      ::init();
 
@@ -167,6 +173,7 @@ PyMODINIT_FUNC initFem()
     Fem::FemPostPipeline            ::init();
     Fem::FemPostFilter              ::init();
     Fem::FemPostClipFilter          ::init();
+    Fem::FemPostDataAlongLineFilter ::init();
     Fem::FemPostScalarClipFilter    ::init();
     Fem::FemPostWarpVectorFilter    ::init();
     Fem::FemPostCutFilter           ::init();
@@ -176,4 +183,6 @@ PyMODINIT_FUNC initFem()
     Fem::FemPostSphereFunction      ::init();
     Fem::PropertyPostDataObject     ::init();
 #endif
+
+    PyMOD_Return(femModule);
 }

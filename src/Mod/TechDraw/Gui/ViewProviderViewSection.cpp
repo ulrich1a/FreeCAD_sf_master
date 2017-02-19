@@ -33,15 +33,10 @@
 /// Here the FreeCAD includes sorted by Base,App,Gui......
 #include <Base/Console.h>
 #include <Base/Parameter.h>
-#include <Base/Exception.h>
-#include <Base/Sequencer.h>
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
-#include <Gui/SoFCSelection.h>
-#include <Gui/Selection.h>
 
-#include <Mod/TechDraw/App/DrawView.h>
 #include "ViewProviderViewSection.h"
 
 using namespace TechDrawGui;
@@ -53,7 +48,17 @@ PROPERTY_SOURCE(TechDrawGui::ViewProviderViewSection, TechDrawGui::ViewProviderV
 
 ViewProviderViewSection::ViewProviderViewSection()
 {
+    static const char *sgroup = "Surface";
+    static const char *hgroup = "Hatch";
     sPixmap = "TechDraw_Tree_Section";
+    ADD_PROPERTY_TYPE(ShowCutSurface ,(true),sgroup,App::Prop_None,"Show/hide the cut surface");
+    ADD_PROPERTY_TYPE(CutSurfaceColor,(0.0,0.0,0.0),sgroup,App::Prop_None,"The color to shade the cut surface");
+    ADD_PROPERTY_TYPE(HatchCutSurface ,(false),hgroup,App::Prop_None,"Hatch the cut surface");
+    ADD_PROPERTY_TYPE(HatchColor,(0.0,0.0,0.0),hgroup,App::Prop_None,"The color of the hatch pattern");
+    ADD_PROPERTY_TYPE(WeightPattern,(0.1),hgroup,App::Prop_None,"GeomHatch pattern line thickness");
+
+    getParameters();
+
 }
 
 ViewProviderViewSection::~ViewProviderViewSection()
@@ -79,11 +84,30 @@ std::vector<std::string> ViewProviderViewSection::getDisplayModes(void) const
     return StrList;
 }
 
+//for VP properties
+void ViewProviderViewSection::onChanged(const App::Property* prop)
+{
+    if (prop == &WeightPattern   ||
+        prop == &HatchCutSurface ||
+        prop == &HatchColor      ||
+        prop == &ShowCutSurface  ||
+        prop == &CutSurfaceColor ) {
+        updateGraphic();   
+    }
+
+    ViewProviderViewPart::onChanged(prop);
+}
+
+//for Feature properties
 void ViewProviderViewSection::updateData(const App::Property* prop)
 {
-    //Base::Console().Log("ViewProviderViewSection::updateData - Update View: %s\n",prop->getName());
-    //
-    Gui::ViewProviderDocumentObject::updateData(prop);
+    if (prop == &(getViewObject()->FileHatchPattern)   ||
+        prop == &(getViewObject()->NameGeomPattern)    ||
+        prop == &(getViewObject()->HatchScale)   ) {
+        updateGraphic();
+    }
+
+    ViewProviderViewPart::updateData(prop);
 }
 
 std::vector<App::DocumentObject*> ViewProviderViewSection::claimChildren(void) const
@@ -91,7 +115,31 @@ std::vector<App::DocumentObject*> ViewProviderViewSection::claimChildren(void) c
     return ViewProviderViewPart::claimChildren();
 }
 
-TechDraw::DrawView* ViewProviderViewSection::getViewObject() const
+void ViewProviderViewSection::updateGraphic(void)
 {
-    return dynamic_cast<TechDraw::DrawView*>(pcObject);
+    // redraw QGIVP
+    QGIView* qgiv = getQView();
+    if (qgiv) {
+        qgiv->updateView(true);
+    }
+}
+
+void ViewProviderViewSection::getParameters(void)
+{
+    Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
+        .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw/Colors");
+    App::Color cutColor = App::Color((uint32_t) hGrp->GetUnsigned("CutSurfaceColor", 0xC8C8C800));
+    CutSurfaceColor.setValue(cutColor);
+    App::Color hatchColor = App::Color((uint32_t) hGrp->GetUnsigned("SectionHatchColor", 0x00000000));
+    HatchColor.setValue(hatchColor);
+  
+    hGrp = App::GetApplication().GetUserParameter()
+        .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw/PAT"); 
+    double lineWeight = hGrp->GetFloat("GeomWeight",0.1);
+    WeightPattern.setValue(lineWeight);
+}
+
+TechDraw::DrawViewSection* ViewProviderViewSection::getViewObject() const
+{
+    return dynamic_cast<TechDraw::DrawViewSection*>(pcObject);
 }

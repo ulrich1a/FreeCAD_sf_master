@@ -198,14 +198,14 @@ FreeCADGui_embedToWindow(PyObject * /*self*/, PyObject *args)
 #if defined(Q_OS_WIN)
     void* window = 0;
     str >> window;
-    WId winid = (WId)window;
+    HWND winid = (HWND)window;
 
     LONG oldLong = GetWindowLong(winid, GWL_STYLE);
     SetWindowLong(winid, GWL_STYLE,
     oldLong | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
     //SetWindowLong(widget->winId(), GWL_STYLE,
     //    WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-    SetParent(widget->winId(), winid);
+    SetParent((HWND)widget->winId(), winid);
 
     QEvent embeddingEvent(QEvent::EmbeddingControl);
     QApplication::sendEvent(widget, &embeddingEvent);
@@ -238,7 +238,7 @@ struct PyMethodDef FreeCADGui_methods[] = {
      "an event loop or showing up any GUI\n"},
     {"embedToWindow",FreeCADGui_embedToWindow,METH_VARARGS,
      "embedToWindow() -- Embeds the main window into another window\n"},
-    {NULL, NULL}  /* sentinel */
+    {NULL, NULL, 0, NULL}  /* sentinel */
 };
 
 static
@@ -325,7 +325,7 @@ PyMODINIT_FUNC initFreeCADGui()
         Base::Interpreter().loadModule("FreeCAD");
         App::Application::Config()["AppIcon"] = "freecad";
         App::Application::Config()["SplashScreen"] = "freecadsplash";
-        App::Application::Config()["CopyrightInfo"] = "\xc2\xa9 Juergen Riegel, Werner Mayer, Yorik van Havre 2001-2015\n";
+        App::Application::Config()["CopyrightInfo"] = "\xc2\xa9 Juergen Riegel, Werner Mayer, Yorik van Havre 2001-2017\n";
         Gui::Application::initApplication();
         Py_InitModule("FreeCADGui", FreeCADGui_methods);
     }

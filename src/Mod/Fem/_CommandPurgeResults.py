@@ -24,13 +24,13 @@ __title__ = "Command Purge Fem Results"
 __author__ = "Juergen Riegel"
 __url__ = "http://www.freecadweb.org"
 
-import FreeCAD
+## @package CommandPurgeResults
+#  \ingroup FEM
+
 from FemCommands import FemCommands
 import FemTools
-
-if FreeCAD.GuiUp:
-    import FreeCADGui
-    from PySide import QtCore
+import FreeCADGui
+from PySide import QtCore
 
 
 class _CommandPurgeResults(FemCommands):
@@ -46,8 +46,7 @@ class _CommandPurgeResults(FemCommands):
     def Activated(self):
         fea = FemTools.FemTools()
         fea.reset_all()
-
         self.hide_meshes_show_parts_constraints()
 
-if FreeCAD.GuiUp:
-    FreeCADGui.addCommand('Fem_PurgeResults', _CommandPurgeResults())
+
+FreeCADGui.addCommand('Fem_PurgeResults', _CommandPurgeResults())

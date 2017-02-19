@@ -71,7 +71,7 @@ const QString TaskSketchBasedParameters::onAddSelection(const Gui::SelectionChan
     PartDesign::ProfileBased* pcSketchBased = static_cast<PartDesign::ProfileBased*>(vp->getObject());
     App::DocumentObject* selObj = pcSketchBased->getDocument()->getObject(msg.pObjectName);
     if (selObj == pcSketchBased)
-        return QString::fromLatin1("");
+        return QString();
     std::string subname = msg.pSubName;
     QString refStr;
 
@@ -79,7 +79,7 @@ const QString TaskSketchBasedParameters::onAddSelection(const Gui::SelectionChan
     if (PartDesign::Feature::isDatum(selObj)) {
         subname = "";
         refStr = QString::fromLatin1(selObj->getNameInDocument());
-    } else {
+    } else if (subname.size() > 4) {
         int faceId = std::atoi(&subname[4]);
         refStr = QString::fromLatin1(selObj->getNameInDocument()) + QString::fromLatin1(":") + QObject::tr("Face") + QString::number(faceId);
     }
@@ -94,30 +94,29 @@ const QString TaskSketchBasedParameters::onAddSelection(const Gui::SelectionChan
 void TaskSketchBasedParameters::onSelectReference(const bool pressed, const bool edge, const bool face, const bool planar) {
     // Note: Even if there is no solid, App::Plane and Part::Datum can still be selected
 
-    PartDesign::ProfileBased* pcSketchBased = static_cast<PartDesign::ProfileBased*>(vp->getObject());
+    PartDesign::ProfileBased* pcSketchBased = dynamic_cast<PartDesign::ProfileBased*>(vp->getObject());
+    if (pcSketchBased) {
+        // The solid this feature will be fused to
+        App::DocumentObject* prevSolid = pcSketchBased->getBaseObject( /* silent =*/ true );
 
-    // The solid this feature will be fused to
-    App::DocumentObject* prevSolid = pcSketchBased->getBaseObject( /* silent =*/ true );
-
-    if (pressed) {
-        Gui::Document* doc = Gui::Application::Instance->activeDocument();
-        if (doc) {
-            if (pcSketchBased)
+        if (pressed) {
+            Gui::Document* doc = vp->getDocument();
+            if (doc) {
                 doc->setHide(pcSketchBased->getNameInDocument());
-            if (prevSolid)
-                doc->setShow(prevSolid->getNameInDocument());
-        }
-        Gui::Selection().clearSelection();
-        Gui::Selection().addSelectionGate
-            (new ReferenceSelection(prevSolid, edge, face, planar));
-    } else {
-        Gui::Selection().rmvSelectionGate();
-        Gui::Document* doc = Gui::Application::Instance->activeDocument();
-        if (doc) {
-            if (pcSketchBased)
+                if (prevSolid)
+                    doc->setShow(prevSolid->getNameInDocument());
+            }
+            Gui::Selection().clearSelection();
+            Gui::Selection().addSelectionGate
+                (new ReferenceSelection(prevSolid, edge, face, planar));
+        } else {
+            Gui::Selection().rmvSelectionGate();
+            Gui::Document* doc = vp->getDocument();
+            if (doc) {
                 doc->setShow(pcSketchBased->getNameInDocument());
-            if (prevSolid)
-                doc->setHide(prevSolid->getNameInDocument());
+                if (prevSolid)
+                    doc->setHide(prevSolid->getNameInDocument());
+            }
         }
     }
 }
@@ -129,7 +128,7 @@ void TaskSketchBasedParameters::exitSelectionMode()
 
 const QByteArray TaskSketchBasedParameters::onFaceName(const QString& text)
 {
-    if (text.length() == 0)
+    if (text.isEmpty())
         return QByteArray();
 
     QStringList parts = text.split(QChar::fromLatin1(':'));
@@ -141,11 +140,14 @@ const QByteArray TaskSketchBasedParameters::onFaceName(const QString& text)
         return QByteArray();
 
     PartDesign::Body* activeBody = Gui::Application::Instance->activeView()->getActiveObject<PartDesign::Body*>(PDBODYKEY);
+    if (!activeBody)
+        return QByteArray();
+
     if (obj->getTypeId().isDerivedFrom(App::Plane::getClassTypeId())) {
         // everything is OK (we assume a Part can only have exactly 3 App::Plane objects located at the base of the feature tree)
         return QByteArray();
     } else if (obj->getTypeId().isDerivedFrom(Part::Datum::getClassTypeId())) {
-        if (!activeBody->hasFeature(obj))
+        if (!activeBody->hasObject(obj))
             return QByteArray();
         return QByteArray();
     } else {
@@ -176,7 +178,7 @@ QString TaskSketchBasedParameters::getFaceReference(const QString& obj, const QS
     QString o = obj.left(obj.indexOf(QString::fromLatin1(":")));
 
     if (o == tr("No face selected"))
-        return QString::fromLatin1("");
+        return QString();
     else
         return QString::fromLatin1("(App.activeDocument().") + o +
                 QString::fromLatin1(", [\"") + sub + QString::fromLatin1("\"])");

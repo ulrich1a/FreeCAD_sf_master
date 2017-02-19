@@ -92,6 +92,7 @@
 #include <Base/FileInfo.h>
 #include <Base/Sequencer.h>
 #include <Base/Tools.h>
+#include <Base/UnitsApi.h>
 
 #include "View3DInventorViewer.h"
 #include "ViewProviderDocumentObject.h"
@@ -350,6 +351,9 @@ View3DInventorViewer::View3DInventorViewer(const QGLFormat& format, QWidget* par
 
 void View3DInventorViewer::init()
 {
+    fpsEnabled = false;
+    vboEnabled = false;
+
     Gui::Selection().Attach(this);
 
     // Coin should not clear the pixel-buffer, so the background image
@@ -590,6 +594,7 @@ void View3DInventorViewer::initialize()
 void View3DInventorViewer::OnChange(Gui::SelectionSingleton::SubjectType& rCaller,
                                     Gui::SelectionSingleton::MessageType Reason)
 {
+    Q_UNUSED(rCaller); 
     if (Reason.Type == SelectionChanges::AddSelection ||
         Reason.Type == SelectionChanges::RmvSelection ||
         Reason.Type == SelectionChanges::SetSelection ||
@@ -599,6 +604,16 @@ void View3DInventorViewer::OnChange(Gui::SelectionSingleton::SubjectType& rCalle
     }
 }
 /// @endcond
+
+SbBool View3DInventorViewer::searchNode(SoNode* node) const
+{
+    SoSearchAction searchAction;
+    searchAction.setNode(node);
+    searchAction.setInterest(SoSearchAction::FIRST);
+    searchAction.apply(this->getSceneGraph());
+    SoPath* selectionPath = searchAction.getPath();
+    return selectionPath ? true : false;
+}
 
 SbBool View3DInventorViewer::hasViewProvider(ViewProvider* pcProvider) const
 {
@@ -705,7 +720,7 @@ void View3DInventorViewer::updateOverrideMode(const std::string& mode)
     overrideMode = mode;
 }
 
-void View3DInventorViewer::setViewportCB(void* userdata, SoAction* action)
+void View3DInventorViewer::setViewportCB(void*, SoAction* action)
 {
     // Make sure to override the value set inside SoOffscreenRenderer::render()
     if (action->isOfType(SoGLRenderAction::getClassTypeId())) {
@@ -716,7 +731,7 @@ void View3DInventorViewer::setViewportCB(void* userdata, SoAction* action)
     }
 }
 
-void View3DInventorViewer::clearBufferCB(void* userdata, SoAction* action)
+void View3DInventorViewer::clearBufferCB(void*, SoAction* action)
 {
     if (action->isOfType(SoGLRenderAction::getClassTypeId())) {
         // do stuff specific for GL rendering here.
@@ -775,6 +790,16 @@ void View3DInventorViewer::setEnabledFPSCounter(bool on)
     fpsEnabled = on;
 }
 
+void View3DInventorViewer::setEnabledVBO(bool on)
+{
+    vboEnabled = on;
+}
+
+bool View3DInventorViewer::isEnabledVBO() const
+{
+    return vboEnabled;
+}
+
 void View3DInventorViewer::setAxisCross(bool on)
 {
     SoNode* scene = getSceneGraph();
@@ -830,8 +855,10 @@ void View3DInventorViewer::setNavigationType(Base::Type t)
     }
 
     NavigationStyle* ns = static_cast<NavigationStyle*>(base);
-    ns->operator = (*this->navigation);
-    delete this->navigation;
+    if (this->navigation) {
+        ns->operator = (*this->navigation);
+        delete this->navigation;
+    }
     this->navigation = ns;
     this->navigation->setViewer(this);
 }
@@ -1144,13 +1171,13 @@ bool View3DInventorViewer::dumpToFile(SoNode* node, const char* filename, bool b
     if (fi.hasExtension("idtf") || fi.hasExtension("svg")) {
         int ps=4;
         QColor c = Qt::white;
-        std::auto_ptr<SoVectorizeAction> vo;
+        std::unique_ptr<SoVectorizeAction> vo;
 
         if (fi.hasExtension("svg")) {
-            vo = std::auto_ptr<SoVectorizeAction>(new SoFCVectorizeSVGAction());
+            vo = std::unique_ptr<SoVectorizeAction>(new SoFCVectorizeSVGAction());
         }
         else if (fi.hasExtension("idtf")) {
-            vo = std::auto_ptr<SoVectorizeAction>(new SoFCVectorizeU3DAction());
+            vo = std::unique_ptr<SoVectorizeAction>(new SoFCVectorizeU3DAction());
         }
         else {
             throw Base::Exception("Not supported vector graphic");
@@ -1177,7 +1204,7 @@ bool View3DInventorViewer::dumpToFile(SoNode* node, const char* filename, bool b
 /**
  * Sets the SoFCInteractiveElement to \a true.
  */
-void View3DInventorViewer::interactionStartCB(void* data, SoQTQuarterAdaptor* viewer)
+void View3DInventorViewer::interactionStartCB(void*, SoQTQuarterAdaptor* viewer)
 {
     SoGLRenderAction* glra = viewer->getSoRenderManager()->getGLRenderAction();
     SoFCInteractiveElement::set(glra->getState(), viewer->getSceneGraph(), true);
@@ -1186,7 +1213,7 @@ void View3DInventorViewer::interactionStartCB(void* data, SoQTQuarterAdaptor* vi
 /**
  * Sets the SoFCInteractiveElement to \a false and forces a redraw.
  */
-void View3DInventorViewer::interactionFinishCB(void* data, SoQTQuarterAdaptor* viewer)
+void View3DInventorViewer::interactionFinishCB(void*, SoQTQuarterAdaptor* viewer)
 {
     SoGLRenderAction* glra = viewer->getSoRenderManager()->getGLRenderAction();
     SoFCInteractiveElement::set(glra->getState(), viewer->getSceneGraph(), false);
@@ -1196,7 +1223,7 @@ void View3DInventorViewer::interactionFinishCB(void* data, SoQTQuarterAdaptor* v
 /**
  * Logs the type of the action that traverses the Inventor tree.
  */
-void View3DInventorViewer::interactionLoggerCB(void* ud, SoAction* action)
+void View3DInventorViewer::interactionLoggerCB(void*, SoAction* action)
 {
     Base::Console().Log("%s\n", action->getTypeId().getName().getString());
 }
@@ -1394,7 +1421,7 @@ void View3DInventorViewer::renderGLImage()
     glEnable(GL_DEPTH_TEST);
 }
 
-//#define ENABLE_GL_DEPTH_RANGE
+// #define ENABLE_GL_DEPTH_RANGE
 // The calls of glDepthRange inside renderScene() causes problems with transparent objects
 // so that's why it is disabled now: http://forum.freecadweb.org/viewtopic.php?f=3&t=6037&hilit=transparency
 
@@ -1426,6 +1453,7 @@ void View3DInventorViewer::renderScene(void)
     SoGLRenderAction* glra = this->getSoRenderManager()->getGLRenderAction();
     SoGLWidgetElement::set(glra->getState(), qobject_cast<QGLWidget*>(this->getGLWidget()));
     SoGLRenderActionElement::set(glra->getState(), glra);
+    SoGLVBOActivatedElement::set(glra->getState(), this->vboEnabled);
     glra->apply(this->backgroundroot);
 
     navigation->updateAnimation();
@@ -1532,35 +1560,18 @@ void View3DInventorViewer::printDimension()
         else if (dimX < dimY)
             fHeight *= ((float)dimY)/((float)dimX);
 
-        float fLog = float(log10(fWidth)), fFac;
-        int   nExp = int(fLog);
-        QString unit;
+        // Translate screen units into user's unit schema
+        Base::Quantity qWidth(Base::Quantity::MilliMetre);
+        Base::Quantity qHeight(Base::Quantity::MilliMetre);
+        qWidth.setValue(fWidth);
+        qHeight.setValue(fHeight);
+        QString wStr = Base::UnitsApi::schemaTranslate(qWidth);
+        QString hStr = Base::UnitsApi::schemaTranslate(qHeight);
 
-        if (nExp >= 6) {
-            fFac = 1.0e+6f;
-            unit = QLatin1String("km");
-        }
-        else if (nExp >= 3) {
-            fFac = 1.0e+3f;
-            unit = QLatin1String("m");
-        }
-        else if ((nExp >= 0) && (fLog > 0.0f)) {
-            fFac = 1.0e+0f;
-            unit = QLatin1String("mm");
-        }
-        else if (nExp >= -3) {
-            fFac = 1.0e-3f;
-            unit = QLatin1String("um");
-        }
-        else {
-            fFac = 1.0e-6f;
-            unit = QLatin1String("nm");
-        }
-
-        QString dim = QString::fromLatin1("%1 x %2 %3")
-                      .arg(fWidth / fFac,0,'f',2)
-                      .arg(fHeight / fFac,0,'f',2)
-                      .arg(unit);
+        // Create final string and update window
+        QString dim = QString::fromLatin1("%1 x %2")
+                      .arg(wStr)
+                      .arg(hStr);
         getMainWindow()->setPaneText(2, dim);
     }
     else
@@ -2257,7 +2268,7 @@ View3DInventorViewer::getFeedbackSize(void) const
   Decide whether or not the mouse pointer cursor should be visible in
   the rendering canvas.
 */
-void View3DInventorViewer::setCursorEnabled(SbBool enable)
+void View3DInventorViewer::setCursorEnabled(SbBool /*enable*/)
 {
     this->setCursorRepresentation(navigation->getViewingMode());
 }

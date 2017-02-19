@@ -52,7 +52,6 @@
 #endif
 
 #include "ViewProviderPythonFeature.h"
-#include "ViewProviderPythonFeaturePy.h"
 #include "Tree.h"
 #include "Window.h"
 #include "Application.h"
@@ -407,7 +406,7 @@ SoDetail* ViewProviderPythonFeatureImp::getDetail(const char* name) const
     return 0;
 }
 
-std::vector<Base::Vector3d> ViewProviderPythonFeatureImp::getSelectionShape(const char* Element) const
+std::vector<Base::Vector3d> ViewProviderPythonFeatureImp::getSelectionShape(const char* /*Element*/) const
 {
     return std::vector<Base::Vector3d>();
 }
@@ -528,6 +527,7 @@ void ViewProviderPythonFeatureImp::setupContextMenu(QMenu* menu)
                 if (vp.hasAttr("__object__")) {
                     PythonWrapper wrap;
                     wrap.loadGuiModule();
+                    wrap.loadWidgetsModule();
                     Py::Callable method(vp.getAttr(std::string("setupContextMenu")));
                     Py::Tuple args(1);
                     args.setItem(0, wrap.fromQWidget(menu, "QMenu"));
@@ -536,6 +536,7 @@ void ViewProviderPythonFeatureImp::setupContextMenu(QMenu* menu)
                 else {
                     PythonWrapper wrap;
                     wrap.loadGuiModule();
+                    wrap.loadWidgetsModule();
                     Py::Callable method(vp.getAttr(std::string("setupContextMenu")));
                     Py::Tuple args(2);
                     args.setItem(0, Py::Object(object->getPyObject(), true));

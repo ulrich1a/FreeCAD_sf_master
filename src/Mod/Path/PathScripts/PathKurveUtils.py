@@ -22,17 +22,12 @@
 # *                                                                         *
 # ***************************************************************************
 '''PathKurveUtils - functions needed for using libarea (created by Dan Heeks) for making simple CNC profile paths '''
-import FreeCAD
-from FreeCAD import Vector
-import FreeCADGui as Gui
+from __future__ import print_function
 import Part
-import DraftGeomUtils
-import DraftVecUtils
-from DraftGeomUtils import geomType
 import math
 import area
-import Path
 from PathScripts import PathUtils
+from PathScripts.PathGeom import PathGeom
 from nc.nc import *
 import PathScripts.nc.iso
 from PathScripts.nc.nc import *
@@ -43,7 +38,7 @@ def makeAreaVertex(seg):
             segtype = int(seg.Curve.Axis.z)  # 1=ccw arc,-1=cw arc
             vertex = area.Vertex(segtype, area.Point(seg.valueAt(seg.LastParameter)[0], seg.valueAt(
                 seg.LastParameter)[1]), area.Point(seg.Curve.Center.x, seg.Curve.Center.y))
-        elif isinstance(seg.Curve, Part.Line):
+        elif isinstance(seg.Curve, Part.LineSegment) or isinstance(seg.Curve, Part.Line):
             point1 = seg.valueAt(seg.FirstParameter)[
                 0], seg.valueAt(seg.FirstParameter)[1]
             point2 = seg.valueAt(seg.LastParameter)[
@@ -78,7 +73,8 @@ def makeAreaCurve(edges, direction, startpt=None, endpt=None):
         # We first compare the last parameter of the first segment to see if it
         # matches either end of the second segment. If not, it must need
         # flipping.
-        if cleanededges[0].valueAt(cleanededges[0].LastParameter) in [cleanededges[1].valueAt(cleanededges[1].FirstParameter), cleanededges[1].valueAt(cleanededges[1].LastParameter)]:
+        p0L = cleanededges[0].valueAt(cleanededges[0].LastParameter)
+        if PathGeom.pointsCoincide(p0L, cleanededges[1].valueAt(cleanededges[1].FirstParameter)) or PathGeom.pointsCoincide(p0L, cleanededges[1].valueAt(cleanededges[1].LastParameter)):
             edge0 = cleanededges[0]
         else:
             edge0 = PathUtils.reverseEdge(cleanededges[0])
@@ -88,8 +84,7 @@ def makeAreaCurve(edges, direction, startpt=None, endpt=None):
         # Now iterate the rest of the edges matching the last parameter of the
         # previous segment.
         for edge in cleanededges[1:]:
-
-            if edge.valueAt(edge.FirstParameter) == edgelist[-1].valueAt(edgelist[-1].LastParameter):
+            if PathGeom.pointsCoincide(edge.valueAt(edge.FirstParameter), edgelist[-1].valueAt(edgelist[-1].LastParameter)):
                 nextedge = edge
             else:
                 nextedge = PathUtils.reverseEdge(edge)
@@ -148,7 +143,7 @@ def profile(curve, side_of_line, radius=1.0, vertfeed=0.0, horizfeed=0.0, offset
 
     output = ""
     output += "G0 Z" + str(clearance) + "\n"
-
+    print("in profile: 151")
     offset_curve = area.Curve(curve)
     if offset_curve.getNumVertices() <= 1:
         raise Exception, "Sketch has no elements!"
@@ -209,7 +204,7 @@ def profile(curve, side_of_line, radius=1.0, vertfeed=0.0, horizfeed=0.0, offset
     layer_count = int((start_depth - final_depth) / stepdown)
     if layer_count * stepdown + 0.00001 < start_depth - final_depth:
         layer_count += 1
-    current_start_depth = start_depth
+    # current_start_depth = start_depth
     prev_depth = start_depth
     for i in range(1, layer_count + 1):
         if i == layer_count:
@@ -297,8 +292,8 @@ and have not been throughly optimized, understood, or tested for FreeCAD.'''
 
 
 def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
-             horizfeed=0.0, offset_extra=0.0, roll_radius=2.0,
-             roll_on=None, roll_off=None, depthparams=None,
+             horizfeed=0.0, vertrapid=0.0, horizrapid=0.0, offset_extra=0.0,
+             roll_radius=2.0, roll_on=None, roll_off=None, depthparams=None,
              extend_at_start=0.0, extend_at_end=0.0, lead_in_line_len=0.0,
              lead_out_line_len=0.0):
 
@@ -315,10 +310,14 @@ def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
     # print "extend_at_end: " + str(extend_at_end)
     # print "lead_in_line_len: " + str(lead_in_line_len)
     # print "lead_out_line_len: " + str(lead_out_line_len)
+    # print "in profile2: 318"
 
     global tags
     direction = direction.lower()
     offset_curve = area.Curve(curve)
+    # print "curve: " , str(curve) 
+    # print "result curve: ", offset_curve.__dict__
+
     if direction == "on":
         use_CRC() == False
 
@@ -340,12 +339,16 @@ def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
                         using_area_for_offset = True
                         a = area.Area()
                         a.append(curve)
+                        print("curve, offset: " , str(curve), str(offset))
                         a.Offset(-offset)
                         for curve in a.getCurves():
+                            print("result curve: ", curve)
                             curve_cw = curve.IsClockwise()
                             if cw != curve_cw:
                                 curve.Reverse()
-                            set_good_start_point(curve, False)
+                            # once we know how what a good start point is
+                            # we might want to set it here
+                            #set_good_start_point(curve, False)
                             profile(curve, direction, 0.0, 0.0, roll_radius, roll_on, roll_off, depthparams,
                                     extend_at_start, extend_at_end, lead_in_line_len, lead_out_line_len)
                         using_area_for_offset = False
@@ -382,7 +385,7 @@ def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
     # do multiple depths
     depths = depthparams.get_depths()
 
-    current_start_depth = depthparams.start_depth
+    # current_start_depth = depthparams.start_depth
 
     # tags
     if len(tags) > 0:
@@ -424,15 +427,17 @@ def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
         # start point
         if (endpoint is None) or (endpoint != s):
             if use_CRC():
-                rapid(crc_start_point.x, crc_start_point.y)
+                rapid(crc_start_point.x, crc_start_point.y) + "F " + horizrapid + "\n"
             else:
-                rapid(s.x, s.y)
+                rapid(s.x, s.y) #+ "F " + str(horizrapid) + "\n"
 
             # rapid down to just above the material
             if endpoint is None:
-                rapid(z=mat_depth + depthparams.rapid_safety_space)
+                rapid(z=mat_depth + depthparams.rapid_safety_space) #+ "F " + vertrapid + "\n"
+
             else:
-                rapid(z=mat_depth)
+                rapid(z=mat_depth) #+ "F " + str(vertrapid) + "\n"
+
 
         # feed down to depth
         mat_depth = depth
@@ -481,7 +486,7 @@ def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
             add_CRC_end_line(offset_curve, roll_on_curve, roll_off_curve,
                              radius, direction, crc_end_point, lead_out_line_len)
             if direction == "on":
-                rapid(z=depthparams.clearance_height)
+                rapid(z=depthparams.clearance_height) #+ "F " + vertrapid + "\n"
             else:
                 feed(crc_end_point.x, crc_end_point.y)
 
@@ -493,11 +498,11 @@ def profile2(curve, direction="on", radius=1.0, vertfeed=0.0,
 
         if endpoint != s:
             # rapid up to the clearance height
-            rapid(z=depthparams.clearance_height)
+            rapid(z=depthparams.clearance_height)# + "F " + vertrapid + "\n"
 
         prev_depth = depth
 
-    rapid(z=depthparams.clearance_height)
+    rapid(z=depthparams.clearance_height)# + "F " + vertrapid + "\n"
 
     del offset_curve
 
@@ -524,7 +529,7 @@ class Tag:
 
         height_above_depth = tag_top_depth - depth
         ramp_width_at_depth = height_above_depth / math.tan(self.angle)
-        cut_depth = start_depth - depth
+        # cut_depth = start_depth - depth
         half_flat_top = radius + self.width / 2
 
         d = curve.PointToPerim(self.p)
@@ -566,7 +571,7 @@ class Tag:
     def get_z_at_perim(self, current_perim, curve, radius, start_depth, depth, final_depth):
         # return the z for this position on the kurve ( specified by current_perim ), for this tag
         # if the position is not within the tag, then depth is returned
-        cut_depth = start_depth - depth
+        # cut_depth = start_depth - depth
         half_flat_top = radius + self.width / 2
 
         z = depth

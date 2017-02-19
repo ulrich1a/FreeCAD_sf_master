@@ -2,7 +2,7 @@
  *   Copyright (c) 2004 Jürgen Riegel <juergen.riegel@web.de>              *
  *   Copyright (c) 2013 Luke Parry <l.parry@warwick.ac.uk>                 *
  *                                                                         *
- *   This file is part of the FreeCAD CAx development system.           *
+ *   This file is part of the FreeCAD CAx development system.              *
  *                                                                         *
  *   This library is free software; you can redistribute it and/or         *
  *   modify it under the terms of the GNU Library General Public           *
@@ -11,7 +11,7 @@
  *                                                                         *
  *   This library  is distributed in the hope that it will be useful,      *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the      *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU Library General Public License for more details.                  *
  *                                                                         *
  *   You should have received a copy of the GNU Library General Public     *
@@ -25,11 +25,11 @@
 #ifndef DRAWINGGUI_VIEWPROVIDERVIEWSECTION_H
 #define DRAWINGGUI_VIEWPROVIDERVIEWSECTION_H
 
-#include "ViewProviderViewPart.h"
+#include <Mod/TechDraw/App/DrawView.h>
+#include <Mod/TechDraw/App/DrawViewPart.h>
+#include <Mod/TechDraw/App/DrawViewSection.h>
 
-namespace TechDraw{
-    class DrawView;
-}
+#include "ViewProviderViewPart.h"
 
 namespace TechDrawGui {
 
@@ -44,15 +44,26 @@ public:
     /// destructor
     virtual ~ViewProviderViewSection();
 
+    App::PropertyBool   ShowCutSurface;
+    App::PropertyColor  CutSurfaceColor;
+    App::PropertyBool   HatchCutSurface;
+    App::PropertyColor  HatchColor;
+    App::PropertyFloat  WeightPattern;
+
 
     virtual void attach(App::DocumentObject *);
     virtual void setDisplayMode(const char* ModeName);
     /// returns a list of all possible modes
     virtual std::vector<std::string> getDisplayModes(void) const;
     virtual void updateData(const App::Property*);
+    virtual void onChanged(const App::Property *prop);
+
     virtual std::vector<App::DocumentObject*> claimChildren(void) const;
 
-    TechDraw::DrawView* getViewObject() const;
+    void updateGraphic(void);
+    void getParameters(void);
+
+    virtual TechDraw::DrawViewSection* getViewObject() const;
 };
 
 } // namespace TechDrawGui

@@ -98,8 +98,8 @@
 #include "Annotation.h"
 #include "MeasureDistance.h"
 #include "Placement.h"
-#include "GeoFeatureGroup.h"
-#include "OriginGroup.h"
+#include "GeoFeatureGroupExtension.h"
+#include "OriginGroupExtension.h"
 #include "Part.h"
 #include "OriginFeature.h"
 #include "Origin.h"
@@ -107,6 +107,7 @@
 #include "Expression.h"
 #include "Transactions.h"
 #include <App/MaterialPy.h>
+#include <Base/GeometryPyCXX.h>
 
 // If you stumble here, run the target "BuildExtractRevision" on Windows systems
 // or the Python script "SubWCRev.py" on Linux based systems which builds
@@ -146,6 +147,34 @@ using namespace Base;
 using namespace App;
 using namespace std;
 
+/** Observer that watches relabeled objects and make sure that the labels inside
+ * a document are unique.
+ * @note In the FreeCAD design it is explicitly allowed to have duplicate labels
+ * (i.e. the user visible text e.g. in the tree view) while the internal names
+ * are always guaranteed to be unique.
+ */
+class ObjectLabelObserver
+{
+public:
+    /// The one and only instance.
+    static ObjectLabelObserver* instance();
+    /// Destructs the sole instance.
+    static void destruct ();
+
+    /** Checks the new label of the object and relabel it if needed
+     * to make it unique document-wide
+     */
+    void slotRelabelObject(const App::DocumentObject&, const App::Property&);
+
+private:
+    static ObjectLabelObserver* _singleton;
+
+    ObjectLabelObserver();
+    ~ObjectLabelObserver();
+    const App::DocumentObject* current;
+    ParameterGrp::handle _hPGrp;
+};
+
 
 //==========================================================================
 // Application
@@ -158,7 +187,6 @@ Base::ConsoleObserverFile *Application::_pConsoleObserverFile =0;
 
 AppExport std::map<std::string,std::string> Application::mConfig;
 BaseExport extern PyObject* Base::BaseExceptionFreeCADError;
-
 
 //**************************************************************************
 // Construction and destruction
@@ -245,6 +273,10 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     Base::ProgressIndicatorPy::init_type();
     Base::Interpreter().addType(Base::ProgressIndicatorPy::type_object(),
         pBaseModule,"ProgressIndicator");
+
+    Base::Vector2dPy::init_type();
+    Base::Interpreter().addType(Base::Vector2dPy::type_object(),
+        pBaseModule,"Vector2d");
 }
 
 Application::~Application()
@@ -297,7 +329,7 @@ Document* Application::newDocument(const char * Name, const char * UserName)
     }
 
     // create the FreeCAD document
-    auto_ptr<Document> newDoc(new Document() );
+    std::unique_ptr<Document> newDoc(new Document());
 
     // add the document to the internal list
     DocMap[name] = newDoc.release(); // now owned by the Application
@@ -341,7 +373,7 @@ bool Application::closeDocument(const char* name)
     // For exception-safety use a smart pointer
     if (_pActiveDoc == pos->second)
         setActiveDocument((Document*)0);
-    auto_ptr<Document> delDoc (pos->second);
+    std::unique_ptr<Document> delDoc (pos->second);
     DocMap.erase( pos );
 
     // Trigger observers after removing the document from the internal map.
@@ -980,8 +1012,60 @@ static void freecadNewHandler ()
 }
 #endif
 
+#if defined(FC_OS_LINUX)
+#include <execinfo.h>
+#include <dlfcn.h>
+#include <cxxabi.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <sstream>
+
+// This function produces a stack backtrace with demangled function & method names.
+void printBacktrace(size_t skip=0)
+{
+    void *callstack[128];
+    size_t nMaxFrames = sizeof(callstack) / sizeof(callstack[0]);
+    size_t nFrames = backtrace(callstack, nMaxFrames);
+    char **symbols = backtrace_symbols(callstack, nFrames);
+
+    for (size_t i = skip; i < nFrames; i++) {
+        char *demangled = NULL;
+        int status = -1;
+        Dl_info info;
+        if (dladdr(callstack[i], &info) && info.dli_sname && info.dli_fname) {
+            if (info.dli_sname[0] == '_') {
+                demangled = abi::__cxa_demangle(info.dli_sname, NULL, 0, &status);
+            }
+        }
+
+        std::stringstream str;
+        if (status == 0) {
+            void* offset = (void*)((char*)callstack[i] - (char*)info.dli_saddr);
+            str << "#" << (i-skip) << "  " << callstack[i] << " in " << demangled << " from " << info.dli_fname << "+" << offset << std::endl;
+            free(demangled);
+        }
+        else {
+            str << "#" << (i-skip) << "  " << symbols[i] << std::endl;
+        }
+
+        // cannot directly print to cerr when using --write-log
+        std::cerr << str.str();
+    }
+
+    free(symbols);
+}
+#endif
+
 void segmentation_fault_handler(int sig)
 {
+#if defined(FC_OS_LINUX)
+    std::cerr << "Program received signal SIGSEGV, Segmentation fault.\n";
+    printBacktrace(2);
+    exit(1);
+#endif
+
     switch (sig) {
         case SIGSEGV:
             std::cerr << "Illegal storage access..." << std::endl;
@@ -1012,9 +1096,9 @@ void unexpection_error_handler()
     // try to throw an exception and give the user chance to save their work
 #if !defined(_DEBUG)
     throw Base::Exception("Unexpected error occurred! Please save your work under a new file name and restart the application!");
-#endif
-
+#else
     terminate();
+#endif
 }
 
 #ifdef _MSC_VER // Microsoft compiler
@@ -1024,7 +1108,7 @@ void my_trans_func( unsigned int code, EXCEPTION_POINTERS* pExp )
 
    //switch (code)
    //{
-   //    case FLT_DIVIDE_BY_ZERO : 
+   //    case FLT_DIVIDE_BY_ZERO :
    //       //throw CMyFunkyDivideByZeroException(code, pExp);
    //       throw Base::Exception("Devision by zero!");
    //    break;
@@ -1046,12 +1130,14 @@ void Application::init(int argc, char ** argv)
 #endif
         // if an unexpected crash occurs we can install a handler function to
         // write some additional information
-#ifdef _MSC_VER // Microsoft compiler
+#if defined (_MSC_VER) // Microsoft compiler
         std::signal(SIGSEGV,segmentation_fault_handler);
         std::signal(SIGABRT,segmentation_fault_handler);
         std::set_terminate(my_terminate_handler);
         std::set_unexpected(unexpection_error_handler);
 //        _set_se_translator(my_trans_func);
+#elif defined(FC_OS_LINUX)
+        std::signal(SIGSEGV,segmentation_fault_handler);
 #endif
 
         initTypes();
@@ -1096,6 +1182,8 @@ void Application::initTypes(void)
     App ::PropertyAngle             ::init();
     App ::PropertyDistance          ::init();
     App ::PropertyLength            ::init();
+    App ::PropertyArea              ::init();
+    App ::PropertyVolume            ::init();
     App ::PropertySpeed             ::init();
     App ::PropertyAcceleration      ::init();
     App ::PropertyForce             ::init();
@@ -1133,6 +1221,17 @@ void Application::initTypes(void)
     App ::PropertyPythonObject      ::init();
     App ::PropertyExpressionEngine  ::init();
 
+    // Extension classes
+    App ::Extension                     ::init();
+    App ::ExtensionContainer            ::init();
+    App ::DocumentObjectExtension       ::init();
+    App ::GroupExtension                ::init();
+    App ::GroupExtensionPython          ::init();
+    App ::GeoFeatureGroupExtension      ::init();
+    App ::GeoFeatureGroupExtensionPython::init();
+    App ::OriginGroupExtension          ::init();
+    App ::OriginGroupExtensionPython    ::init();
+
     // Document classes
     App ::TransactionalObject       ::init();
     App ::DocumentObject            ::init();
@@ -1156,9 +1255,6 @@ void Application::initTypes(void)
     App ::OriginFeature             ::init();
     App ::Plane                     ::init();
     App ::Line                      ::init();
-    App ::GeoFeatureGroup           ::init();
-    App ::GeoFeatureGroupPython     ::init();
-    App ::OriginGroup               ::init();
     App ::Part                      ::init();
     App ::Origin                    ::init();
 
@@ -1331,6 +1427,8 @@ void Application::initApplication(void)
     Console().Log("Run App init script\n");
     Interpreter().runString(Base::ScriptFactory().ProduceScript("CMakeVariables"));
     Interpreter().runString(Base::ScriptFactory().ProduceScript("FreeCADInit"));
+
+    ObjectLabelObserver::instance();
 }
 
 std::list<std::string> Application::getCmdLineFiles()
@@ -1354,8 +1452,9 @@ std::list<std::string> Application::getCmdLineFiles()
     return files;
 }
 
-void Application::processFiles(const std::list<std::string>& files)
+std::list<std::string> Application::processFiles(const std::list<std::string>& files)
 {
+    std::list<std::string> processed;
     Base::Console().Log("Init: Processing command line files\n");
     for (std::list<std::string>::const_iterator it = files.begin(); it != files.end(); ++it) {
         Base::FileInfo file(*it);
@@ -1366,17 +1465,21 @@ void Application::processFiles(const std::list<std::string>& files)
             if (file.hasExtension("fcstd") || file.hasExtension("std")) {
                 // try to open
                 Application::_pcSingleton->openDocument(file.filePath().c_str());
+                processed.push_back(*it);
             }
             else if (file.hasExtension("fcscript") || file.hasExtension("fcmacro")) {
                 Base::Interpreter().runFile(file.filePath().c_str(), true);
+                processed.push_back(*it);
             }
             else if (file.hasExtension("py")) {
                 try{
                     Base::Interpreter().loadModule(file.fileNamePure().c_str());
+                    processed.push_back(*it);
                 }
                 catch(const PyException&) {
                     // if loading the module does not work, try just running the script (run in __main__)
                     Base::Interpreter().runFile(file.filePath().c_str(),true);
+                    processed.push_back(*it);
                 }
             }
             else {
@@ -1388,6 +1491,7 @@ void Application::processFiles(const std::list<std::string>& files)
                     Base::Interpreter().runStringArg("import %s",mods.front().c_str());
                     Base::Interpreter().runStringArg("%s.open(u\"%s\")",mods.front().c_str(),
                             escapedstr.c_str());
+                    processed.push_back(*it);
                     Base::Console().Log("Command line open: %s.open(u\"%s\")\n",mods.front().c_str(),escapedstr.c_str());
                 }
                 else {
@@ -1405,6 +1509,8 @@ void Application::processFiles(const std::list<std::string>& files)
             Console().Error("Unknown exception while processing file: %s \n", file.filePath().c_str());
         }
     }
+
+    return processed; // successfully processed files
 }
 
 void Application::processCmdLineFiles(void)
@@ -1582,6 +1688,10 @@ pair<string, string> customSyntax(const string& s)
         return make_pair(string("display"), string("null"));
     else if (s.find("-style") == 0)
         return make_pair(string("style"), string("null"));
+    else if (s.find("-graphicssystem") == 0)
+        return make_pair(string("graphicssystem"), string("null"));
+    else if (s.find("-widgetcount") == 0)
+        return make_pair(string("widgetcount"), string(""));
     else if (s.find("-geometry") == 0)
         return make_pair(string("geometry"), string("null"));
     else if (s.find("-font") == 0)
@@ -1650,10 +1760,10 @@ void Application::ParseOptions(int ac, char ** av)
     config.add_options()
     //("write-log,l", value<string>(), "write a log file")
     ("write-log,l", descr.c_str())
-    ("log-file", value<string>(), "Unlike to --write-log this allows to log to an arbitrary file")
+    ("log-file", value<string>(), "Unlike --write-log this allows logging to an arbitrary file")
     ("user-cfg,u", value<string>(),"User config file to load/save user settings")
     ("system-cfg,s", value<string>(),"Systen config file to load/save system settings")
-    ("run-test,t",   value<int>()   ,"Test level")
+    ("run-test,t",   value<string>()   ,"Test case - or 0 for all")
     ("module-path,M", value< vector<string> >()->composing(),"Additional module paths")
     ("python-path,P", value< vector<string> >()->composing(),"Additional python paths")
     ("single-instance", "Allow to run a single instance of the application")
@@ -1672,6 +1782,8 @@ void Application::ParseOptions(int ac, char ** av)
     ("stylesheet", boost::program_options::value< string >(), "set the application stylesheet")
     ("session",    boost::program_options::value< string >(), "restore the application from an earlier session")
     ("reverse",                                               "set the application's layout direction from right to left")
+    ("widgetcount",                                           "print debug messages about widgets")
+    ("graphicssystem", boost::program_options::value< string >(), "backend to be used for on-screen widgets and pixmaps")
     ("display",    boost::program_options::value< string >(), "set the X-Server")
     ("geometry ",  boost::program_options::value< string >(), "set the X-Window geometry")
     ("font",       boost::program_options::value< string >(), "set the X-Window font")
@@ -1684,9 +1796,9 @@ void Application::ParseOptions(int ac, char ** av)
     ("btn",        boost::program_options::value< string >(), "set the X-Window button color")
     ("name",       boost::program_options::value< string >(), "set the X-Window name")
     ("title",      boost::program_options::value< string >(), "set the X-Window title")
-    ("visual",     boost::program_options::value< string >(), "set the X-Window to color scema")
-    ("ncols",      boost::program_options::value< int    >(), "set the X-Window to color scema")
-    ("cmap",                                                  "set the X-Window to color scema")
+    ("visual",     boost::program_options::value< string >(), "set the X-Window to color scheme")
+    ("ncols",      boost::program_options::value< int    >(), "set the X-Window to color scheme")
+    ("cmap",                                                  "set the X-Window to color scheme")
 #if defined(FC_OS_MACOSX)
     ("psn",        boost::program_options::value< string >(), "process serial number")
 #endif
@@ -1716,6 +1828,9 @@ void Application::ParseOptions(int ac, char ** av)
             merge = true;
         }
         else if (strcmp(av[i],"-session") == 0) {
+            merge = true;
+        }
+        else if (strcmp(av[i],"-graphicssystem") == 0) {
             merge = true;
         }
     }
@@ -1860,21 +1975,14 @@ void Application::ParseOptions(int ac, char ** av)
     }
 
     if (vm.count("run-test")) {
-        int level = vm["run-test"].as<int>();
-        switch (level) {
-        case '0':
-            // test script level 0
-            mConfig["RunMode"] = "Internal";
-            mConfig["ScriptFileName"] = "FreeCADTest";
-            //sScriptName = FreeCADTest;
-            break;
-        default:
-            //default testing level 0
-            mConfig["RunMode"] = "Internal";
-            mConfig["ScriptFileName"] = "FreeCADTest";
-            //sScriptName = FreeCADTest;
-            break;
-        };
+       string testCase = vm["run-test"].as<string>();
+        if ( "0" == testCase) {
+            testCase = "TestApp.All";
+        }
+        mConfig["TestCase"] = testCase;
+        mConfig["RunMode"] = "Internal";
+        mConfig["ScriptFileName"] = "FreeCADTest";
+        //sScriptName = FreeCADTest;
     }
 
     if (vm.count("single-instance")) {
@@ -2137,7 +2245,7 @@ std::string Application::FindHomePath(const char* sCall)
         // path. In the worst case we simply get q wrong path and FreeCAD is not
         // able to load its modules.
         char resolved[PATH_MAX];
-#if defined(FC_OS_BSD) 
+#if defined(FC_OS_BSD)
         int mib[4];
         mib[0] = CTL_KERN;
         mib[1] = KERN_PROC;
@@ -2239,3 +2347,80 @@ std::string Application::FindHomePath(const char* sCall)
 #else
 # error "std::string Application::FindHomePath(const char*) not implemented"
 #endif
+
+ObjectLabelObserver* ObjectLabelObserver::_singleton = 0;
+
+ObjectLabelObserver* ObjectLabelObserver::instance()
+{
+    if (!_singleton)
+        _singleton = new ObjectLabelObserver;
+    return _singleton;
+}
+
+void ObjectLabelObserver::destruct ()
+{
+    delete _singleton;
+    _singleton = 0;
+}
+
+void ObjectLabelObserver::slotRelabelObject(const App::DocumentObject& obj, const App::Property& prop)
+{
+    // observe only the Label property
+    if (&prop == &obj.Label) {
+        // have we processed this (or another?) object right now?
+        if (current) {
+            return;
+        }
+
+        std::string label = obj.Label.getValue();
+        App::Document* doc = obj.getDocument();
+        if (doc && !_hPGrp->GetBool("DuplicateLabels")) {
+            std::vector<std::string> objectLabels;
+            std::vector<App::DocumentObject*>::const_iterator it;
+            std::vector<App::DocumentObject*> objs = doc->getObjects();
+            bool match = false;
+
+            for (it = objs.begin();it != objs.end();++it) {
+                if (*it == &obj)
+                    continue; // don't compare object with itself
+                std::string objLabel = (*it)->Label.getValue();
+                if (!match && objLabel == label)
+                    match = true;
+                objectLabels.push_back(objLabel);
+            }
+
+            // make sure that there is a name conflict otherwise we don't have to do anything
+            if (match && !label.empty()) {
+                // remove number from end to avoid lengthy names
+                size_t lastpos = label.length()-1;
+                while (label[lastpos] >= 48 && label[lastpos] <= 57) {
+                    // if 'lastpos' becomes 0 then all characters are digits. In this case we use
+                    // the complete label again
+                    if (lastpos == 0) {
+                        lastpos = label.length()-1;
+                        break;
+                    }
+                    lastpos--;
+                }
+
+                label = label.substr(0, lastpos+1);
+                label = Base::Tools::getUniqueName(label, objectLabels, 3);
+                this->current = &obj;
+                const_cast<App::DocumentObject&>(obj).Label.setValue(label);
+                this->current = 0;
+            }
+        }
+    }
+}
+
+ObjectLabelObserver::ObjectLabelObserver() : current(0)
+{
+    App::GetApplication().signalChangedObject.connect(boost::bind
+        (&ObjectLabelObserver::slotRelabelObject, this, _1, _2));
+    _hPGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp");
+    _hPGrp = _hPGrp->GetGroup("Preferences")->GetGroup("Document");
+}
+
+ObjectLabelObserver::~ObjectLabelObserver()
+{
+}

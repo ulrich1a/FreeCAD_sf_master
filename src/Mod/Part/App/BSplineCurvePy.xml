@@ -3,6 +3,7 @@
 	<PythonExport
 		Father="GeometryCurvePy"
 		Name="BSplineCurvePy"
+        PythonName="Part.BSplineCurve"
 		Twin="GeomBSplineCurve"
 		TwinPointer="GeomBSplineCurve"
 		Include="Mod/Part/App/Geometry.h"
@@ -327,6 +328,11 @@ from the knots table of this B-Spline curve.</UserDocu>
 				</UserDocu>
 			</Documentation>
 		</Methode>
+        <Methode Name="getCardinalSplineTangents" Keyword="true">
+            <Documentation>
+                <UserDocu>Compute the tangents for a Cardinal spline</UserDocu>
+            </Documentation>
+        </Methode>
         <Methode Name="interpolate" Keyword="true">
 			<Documentation>
 				<UserDocu>

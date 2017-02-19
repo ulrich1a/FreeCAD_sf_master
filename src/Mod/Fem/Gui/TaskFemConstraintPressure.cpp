@@ -72,6 +72,9 @@ TaskFemConstraintPressure::TaskFemConstraintPressure(ViewProviderFemConstraintPr
     connect(ui->lw_references, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)),
         this, SLOT(setSelection(QListWidgetItem*)));
 
+    connect(ui->checkBoxReverse, SIGNAL(toggled(bool)),
+        this, SLOT(onCheckReverse(bool)));
+
     this->groupLayout()->addWidget(proxy);
 
 /* Note: */
@@ -119,6 +122,12 @@ void TaskFemConstraintPressure::updateUI()
     }
 }
 
+void TaskFemConstraintPressure::onCheckReverse(const bool pressed)
+{
+    Fem::ConstraintPressure* pcConstraint = static_cast<Fem::ConstraintPressure*>(ConstraintView->getObject());
+    pcConstraint->Reversed.setValue(pressed);
+ }
+
 void TaskFemConstraintPressure::addToSelection()
 {
     std::vector<Gui::SelectionObject> selection = Gui::Selection().getSelectionEx(); //gets vector of selected objects of active document
@@ -143,10 +152,10 @@ void TaskFemConstraintPressure::addToSelection()
 
         for (unsigned int subIt=0;subIt<(subNames.size());++subIt){// for every selected sub element
             bool addMe=true;
-	    if (subNames[subIt].substr(0,4) != "Face") {
-		QMessageBox::warning(this, tr("Selection error"), tr("Only faces can be picked"));
-		return;
-	    }
+        if (subNames[subIt].substr(0,4) != "Face") {
+            QMessageBox::warning(this, tr("Selection error"), tr("Only faces can be picked"));
+            return;
+        }
             for (std::vector<std::string>::iterator itr=std::find(SubElements.begin(),SubElements.end(),subNames[subIt]);
                    itr!= SubElements.end();
                    itr =  std::find(++itr,SubElements.end(),subNames[subIt]))
@@ -267,11 +276,12 @@ double TaskFemConstraintPressure::get_Pressure() const
 
 bool TaskFemConstraintPressure::get_Reverse() const
 {
-	return ui->checkBoxReverse->isChecked();
+    return ui->checkBoxReverse->isChecked();
 }
 /* */
 
-void TaskFemConstraintPressure::changeEvent(QEvent *e){
+void TaskFemConstraintPressure::changeEvent(QEvent *)
+{
 }
 
 //**************************************************************************

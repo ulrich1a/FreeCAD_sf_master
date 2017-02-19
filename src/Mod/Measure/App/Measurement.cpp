@@ -64,7 +64,7 @@ TYPESYSTEM_SOURCE(Measure::Measurement, Base::BaseClass)
 
 Measurement::Measurement()
 {
-
+    measureType = Invalid;
 }
 
 Measurement::~Measurement()
@@ -83,6 +83,12 @@ void Measurement::clear()
 bool Measurement::has3DReferences()
 {
     return (References3D.getSize() > 0);
+}
+
+//add a 3D reference (obj+sub) to end of list
+int Measurement::addReference3D(App::DocumentObject *obj, const std::string& subName)
+{
+    return addReference3D(obj,subName.c_str());
 }
 
 ///add a 3D reference (obj+sub) to end of list
@@ -291,7 +297,7 @@ double Measurement::length() const
   return result;
 }
 
-double Measurement::angle(const Base::Vector3d &param) const
+double Measurement::angle(const Base::Vector3d & /*param*/) const
 {
     int numRefs = References3D.getSize();
     if(!numRefs)

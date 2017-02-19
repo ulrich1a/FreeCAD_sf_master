@@ -124,6 +124,7 @@
 #include "ImportIges.h"
 #include "ImportStep.h"
 #include "edgecluster.h"
+#include "FaceMaker.h"
 
 #ifdef FCUseFreeType
 #  include "FT2FC.h"
@@ -142,20 +143,22 @@ extern const char* BRepBuilderAPI_FaceErrorText(BRepBuilderAPI_FaceError fe);
 namespace Part {
 struct EdgePoints {
     gp_Pnt v1, v2;
+    std::list<TopoDS_Edge>::iterator it;
     TopoDS_Edge edge;
 };
 
-static std::list<TopoDS_Edge> sort_Edges(double tol3d, const std::vector<TopoDS_Edge>& edges)
+PartExport std::list<TopoDS_Edge> sort_Edges(double tol3d, std::list<TopoDS_Edge>& edges)
 {
     tol3d = tol3d * tol3d;
     std::list<EdgePoints>  edge_points;
     TopExp_Explorer xp;
-    for (std::vector<TopoDS_Edge>::const_iterator it = edges.begin(); it != edges.end(); ++it) {
+    for (std::list<TopoDS_Edge>::iterator it = edges.begin(); it != edges.end(); ++it) {
         EdgePoints ep;
         xp.Init(*it,TopAbs_VERTEX);
         ep.v1 = BRep_Tool::Pnt(TopoDS::Vertex(xp.Current()));
         xp.Next();
         ep.v2 = BRep_Tool::Pnt(TopoDS::Vertex(xp.Current()));
+        ep.it = it;
         ep.edge = *it;
         edge_points.push_back(ep);
     }
@@ -169,6 +172,7 @@ static std::list<TopoDS_Edge> sort_Edges(double tol3d, const std::vector<TopoDS_
     last  = edge_points.front().v2;
 
     sorted.push_back(edge_points.front().edge);
+    edges.erase(edge_points.front().it);
     edge_points.erase(edge_points.begin());
 
     while (!edge_points.empty()) {
@@ -178,6 +182,7 @@ static std::list<TopoDS_Edge> sort_Edges(double tol3d, const std::vector<TopoDS_
             if (pEI->v1.SquareDistance(last) <= tol3d) {
                 last = pEI->v2;
                 sorted.push_back(pEI->edge);
+                edges.erase(pEI->it);
                 edge_points.erase(pEI);
                 pEI = edge_points.begin();
                 break;
@@ -185,6 +190,7 @@ static std::list<TopoDS_Edge> sort_Edges(double tol3d, const std::vector<TopoDS_
             else if (pEI->v2.SquareDistance(first) <= tol3d) {
                 first = pEI->v1;
                 sorted.push_front(pEI->edge);
+                edges.erase(pEI->it);
                 edge_points.erase(pEI);
                 pEI = edge_points.begin();
                 break;
@@ -197,6 +203,7 @@ static std::list<TopoDS_Edge> sort_Edges(double tol3d, const std::vector<TopoDS_
                 last = curve->ReversedParameter(last);
                 TopoDS_Edge edgeReversed = BRepBuilderAPI_MakeEdge(curve->Reversed(), last, first);
                 sorted.push_back(edgeReversed);
+                edges.erase(pEI->it);
                 edge_points.erase(pEI);
                 pEI = edge_points.begin();
                 break;
@@ -209,6 +216,7 @@ static std::list<TopoDS_Edge> sort_Edges(double tol3d, const std::vector<TopoDS_
                 last = curve->ReversedParameter(last);
                 TopoDS_Edge edgeReversed = BRepBuilderAPI_MakeEdge(curve->Reversed(), last, first);
                 sorted.push_front(edgeReversed);
+                edges.erase(pEI->it);
                 edge_points.erase(pEI);
                 pEI = edge_points.begin();
                 break;
@@ -251,6 +259,10 @@ public:
         );
         add_varargs_method("makeShell",&Module::makeShell,
             "makeShell(list) -- Create a shell out of a list of faces."
+        );
+        add_varargs_method("makeFace",&Module::makeFace,
+            "makeFace(list_of_shapes_or_compound, maker_class_name) -- Create a face (faces) using facemaker class.\n"
+            "maker_class_name is a string like 'Part::FaceMakerSimple'."
         );
         add_varargs_method("makeFilledFace",&Module::makeFilledFace,
             "makeFilledFace(list) -- Create a face out of a list of edges."
@@ -351,6 +363,9 @@ public:
         add_varargs_method("__sortEdges__",&Module::sortEdges,
             "__sortEdges__(list of edges) -- Helper method to sort an unsorted list of edges so that afterwards\n"
             "two adjacent edges share a common vertex"
+        );
+        add_varargs_method("sortEdges",&Module::sortEdges2,
+            "sortEdges(list of edges) -- Helper method to sort a list of edges into a list of list of connected edges"
         );
         add_varargs_method("__toPythonOCC__",&Module::toPythonOCC,
             "__toPythonOCC__(shape) -- Helper method to convert an internal shape to pythonocc shape"
@@ -625,6 +640,63 @@ private:
         }
 
         return Py::asObject(new TopoShapeShellPy(new TopoShape(shape)));
+    }
+    Py::Object makeFace(const Py::Tuple& args)
+    {
+        try {
+            char* className = 0;
+            PyObject* pcPyShapeOrList = nullptr;
+            PyErr_Clear();
+            if (PyArg_ParseTuple(args.ptr(), "Os", &pcPyShapeOrList, &className)) {
+                std::unique_ptr<FaceMaker> fm = Part::FaceMaker::ConstructFromType(className);
+
+                //dump all supplied shapes to facemaker, no matter what type (let facemaker decide).
+                if (PySequence_Check(pcPyShapeOrList)){
+                    Py::Sequence list(pcPyShapeOrList);
+                    for (Py::Sequence::iterator it = list.begin(); it != list.end(); ++it) {
+                        PyObject* item = (*it).ptr();
+                        if (PyObject_TypeCheck(item, &(Part::TopoShapePy::Type))) {
+                            const TopoDS_Shape& sh = static_cast<Part::TopoShapePy*>(item)->getTopoShapePtr()->getShape();
+                            fm->addShape(sh);
+                        } else {
+                            throw Py::TypeError("Object is not a shape.");
+                        }
+                    }
+                } else if (PyObject_TypeCheck(pcPyShapeOrList, &(Part::TopoShapePy::Type))) {
+                    const TopoDS_Shape& sh = static_cast<Part::TopoShapePy*>(pcPyShapeOrList)->getTopoShapePtr()->getShape();
+                    if (sh.IsNull())
+                        throw Base::Exception("Shape is null!");
+                    if (sh.ShapeType() == TopAbs_COMPOUND)
+                        fm->useCompound(TopoDS::Compound(sh));
+                    else
+                        fm->addShape(sh);
+                } else {
+                    throw Py::Exception(PyExc_TypeError, "First argument is neither a shape nor list of shapes.");
+                }
+
+                fm->Build();
+
+                if(fm->Shape().IsNull())
+                    return Py::asObject(new TopoShapePy(new TopoShape(fm->Shape())));
+
+                switch(fm->Shape().ShapeType()){
+                case TopAbs_FACE:
+                    return Py::asObject(new TopoShapeFacePy(new TopoShape(fm->Shape())));
+                case TopAbs_COMPOUND:
+                    return Py::asObject(new TopoShapeCompoundPy(new TopoShape(fm->Shape())));
+                default:
+                    return Py::asObject(new TopoShapePy(new TopoShape(fm->Shape())));
+                }
+            }
+
+            throw Py::Exception(Base::BaseExceptionFreeCADError, std::string("Argument type signature not recognized. Should be either (list, string), or (shape, string)"));
+
+        } catch (Standard_Failure) {
+            Handle_Standard_Failure e = Standard_Failure::Caught();
+            throw Py::Exception(PartExceptionOCCError, e->GetMessageString());
+        } catch (Base::Exception &e){
+            throw Py::Exception(Base::BaseExceptionFreeCADError, e.what());
+        }
     }
     Py::Object makeFilledFace(const Py::Tuple& args)
     {
@@ -1532,7 +1604,6 @@ private:
 #else
         throw Py::RuntimeError("FreeCAD compiled without FreeType support! This method is disabled...");
 #endif
-        return Py::None();
     }
     Py::Object exportUnits(const Py::Tuple& args)
     {
@@ -1681,7 +1752,7 @@ private:
         }
 
         Py::Sequence list(obj);
-        std::vector<TopoDS_Edge> edges;
+        std::list<TopoDS_Edge> edges;
         for (Py::Sequence::iterator it = list.begin(); it != list.end(); ++it) {
             PyObject* item = (*it).ptr();
             if (PyObject_TypeCheck(item, &(Part::TopoShapePy::Type))) {
@@ -1704,6 +1775,41 @@ private:
         }
 
         return sorted_list;
+    }
+    Py::Object sortEdges2(const Py::Tuple& args)
+    {
+        PyObject *obj;
+        if (!PyArg_ParseTuple(args.ptr(), "O", &obj)) {
+            throw Py::Exception(PartExceptionOCCError, "list of edges expected");
+        }
+
+        Py::Sequence list(obj);
+        std::list<TopoDS_Edge> edges;
+        for (Py::Sequence::iterator it = list.begin(); it != list.end(); ++it) {
+            PyObject* item = (*it).ptr();
+            if (PyObject_TypeCheck(item, &(Part::TopoShapePy::Type))) {
+                const TopoDS_Shape& sh = static_cast<Part::TopoShapePy*>(item)->getTopoShapePtr()->getShape();
+                if (sh.ShapeType() == TopAbs_EDGE)
+                    edges.push_back(TopoDS::Edge(sh));
+                else {
+                    throw Py::TypeError("shape is not an edge");
+                }
+            }
+            else {
+                throw Py::TypeError("item is not a shape");
+            }
+        }
+
+        Py::List root_list;
+        while(edges.size()) {
+            std::list<TopoDS_Edge> sorted = sort_Edges(Precision::Confusion(), edges);
+            Py::List sorted_list;
+            for (std::list<TopoDS_Edge>::iterator it = sorted.begin(); it != sorted.end(); ++it) {
+                sorted_list.append(Py::Object(new TopoShapeEdgePy(new TopoShape(*it)),true));
+            }
+            root_list.append(sorted_list);
+        }
+        return root_list;
     }
     Py::Object toPythonOCC(const Py::Tuple& args)
     {

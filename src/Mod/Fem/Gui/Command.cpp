@@ -26,7 +26,7 @@
 # include <Standard_math.hxx>
 # include <QApplication>
 # include <QMessageBox>
-#include <QAction>
+# include <QAction>
 #endif
 
 #include <Inventor/nodes/SoEventCallback.h>
@@ -58,7 +58,6 @@
 #include <Mod/Part/App/PartFeature.h>
 #include <Mod/Fem/App/FemMeshObject.h>
 #include <Mod/Fem/App/FemSetNodesObject.h>
-#include <strstream>
 #include <Mod/Fem/App/FemConstraint.h>
 #include <Mod/Fem/App/FemAnalysis.h>
 #include "ActiveAnalysisObserver.h"
@@ -115,7 +114,7 @@ CmdFemCreateAnalysis::CmdFemCreateAnalysis()
     sPixmap         = "fem-analysis";
 }
 
-void CmdFemCreateAnalysis::activated(int iMsg)
+void CmdFemCreateAnalysis::activated(int)
 {
 #ifndef FCWithNetgen
     QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -177,7 +176,7 @@ CmdFemAddPart::CmdFemAddPart()
     sPixmap         = "fem-add-fem-mesh";
 }
 
-void CmdFemAddPart::activated(int iMsg)
+void CmdFemAddPart::activated(int)
 {
 #ifndef FCWithNetgen
     QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -240,7 +239,7 @@ CmdFemCreateSolver::CmdFemCreateSolver()
     sPixmap         = "fem-solver";
 }
 
-void CmdFemCreateSolver::activated(int iMsg)
+void CmdFemCreateSolver::activated(int)
 {
 #ifndef FCWithNetgen
     QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
@@ -285,7 +284,7 @@ CmdFemConstraintBearing::CmdFemConstraintBearing()
     sPixmap         = "fem-constraint-bearing";
 }
 
-void CmdFemConstraintBearing::activated(int iMsg)
+void CmdFemConstraintBearing::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -326,7 +325,7 @@ CmdFemConstraintFixed::CmdFemConstraintFixed()
     sPixmap         = "fem-constraint-fixed";
 }
 
-void CmdFemConstraintFixed::activated(int iMsg)
+void CmdFemConstraintFixed::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -368,7 +367,7 @@ CmdFemConstraintPlaneRotation::CmdFemConstraintPlaneRotation()
     sPixmap         = "fem-constraint-planerotation";
 }
 
-void CmdFemConstraintPlaneRotation::activated(int iMsg)
+void CmdFemConstraintPlaneRotation::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -409,7 +408,7 @@ CmdFemConstraintContact::CmdFemConstraintContact()
     sPixmap         = "fem-constraint-contact";
 }
 
-void CmdFemConstraintContact::activated(int iMsg)
+void CmdFemConstraintContact::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -439,6 +438,50 @@ bool CmdFemConstraintContact::isActive(void)
 }
 
 //=====================================================================================
+DEF_STD_CMD_A(CmdFemConstraintTransform);
+
+CmdFemConstraintTransform::CmdFemConstraintTransform()
+  : Command("Fem_ConstraintTransform")
+{
+    sAppModule      = "Fem";
+    sGroup          = QT_TR_NOOP("Fem");
+    sMenuText       = QT_TR_NOOP("Create FEM transform constraint");
+    sToolTipText    = QT_TR_NOOP("Create FEM constraint for transforming a face");
+    sWhatsThis      = "Fem_ConstraintTransform";
+    sStatusTip      = sToolTipText;
+    sPixmap         = "fem-constraint-transform";
+}
+
+void CmdFemConstraintTransform::activated(int)
+{
+    Fem::FemAnalysis        *Analysis;
+
+    if(getConstraintPrerequisits(&Analysis))
+        return;
+
+    std::string FeatName = getUniqueObjectName("FemConstraintTransform");
+
+    openCommand("Make FEM constraint transform on face");
+    doCommand(Doc,"App.activeDocument().addObject(\"Fem::ConstraintTransform\",\"%s\")",FeatName.c_str());
+    doCommand(Doc,"App.activeDocument().%s.X_rot = 0.0",FeatName.c_str());
+    doCommand(Doc,"App.activeDocument().%s.Y_rot = 0.0",FeatName.c_str());
+    doCommand(Doc,"App.activeDocument().%s.Z_rot = 0.0",FeatName.c_str());
+    doCommand(Doc,"App.activeDocument().%s.Scale = 1",FeatName.c_str());
+    doCommand(Doc,"App.activeDocument().%s.Member = App.activeDocument().%s.Member + [App.activeDocument().%s]",
+                             Analysis->getNameInDocument(),Analysis->getNameInDocument(),FeatName.c_str());
+
+    doCommand(Doc,"%s",gethideMeshShowPartStr(FeatName).c_str()); //OvG: Hide meshes and show parts
+
+    updateActive();
+
+    doCommand(Gui,"Gui.activeDocument().setEdit('%s')",FeatName.c_str());
+}
+
+bool CmdFemConstraintTransform::isActive(void)
+{
+    return FemGui::ActiveAnalysisObserver::instance()->hasActiveObject();
+}
+//=====================================================================================
 DEF_STD_CMD_A(CmdFemConstraintHeatflux);
 
 CmdFemConstraintHeatflux::CmdFemConstraintHeatflux()
@@ -453,7 +496,7 @@ CmdFemConstraintHeatflux::CmdFemConstraintHeatflux()
     sPixmap         = "fem-constraint-heatflux";
 }
 
-void CmdFemConstraintHeatflux::activated(int iMsg)
+void CmdFemConstraintHeatflux::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -497,7 +540,7 @@ CmdFemConstraintForce::CmdFemConstraintForce()
     sPixmap         = "fem-constraint-force";
 }
 
-void CmdFemConstraintForce::activated(int iMsg)
+void CmdFemConstraintForce::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -525,6 +568,52 @@ bool CmdFemConstraintForce::isActive(void)
     return FemGui::ActiveAnalysisObserver::instance()->hasActiveObject();
 }
 
+
+
+//=====================================================================================
+
+DEF_STD_CMD_A(CmdFemConstraintFluidBoundary);
+
+CmdFemConstraintFluidBoundary::CmdFemConstraintFluidBoundary()
+  : Command("Fem_ConstraintFluidBoundary")
+{
+    sAppModule      = "Fem";
+    sGroup          = QT_TR_NOOP("Fem");
+    sMenuText       = QT_TR_NOOP("Create fluid boundary condition");
+    sToolTipText    = QT_TR_NOOP("Create fluid boundary condition on face entity for Computional Fluid Dynamics");
+    sWhatsThis      = "Fem_ConstraintFluidBoundary";
+    sStatusTip      = sToolTipText;
+    sPixmap         = "fem-constraint-fluid-boundary";
+}
+
+void CmdFemConstraintFluidBoundary::activated(int)
+{
+    Fem::FemAnalysis        *Analysis;
+
+    if(getConstraintPrerequisits(&Analysis))
+        return;
+
+    std::string FeatName = getUniqueObjectName("FluidBoundary");
+
+    openCommand("Create fluid boundary condition");
+    doCommand(Doc,"App.activeDocument().addObject(\"Fem::ConstraintFluidBoundary\",\"%s\")",FeatName.c_str());
+    doCommand(Doc,"App.activeDocument().%s.Scale = 1",FeatName.c_str()); //OvG: set initial scale to 1
+    //BoundaryValue is already the default value, zero is acceptable
+    doCommand(Doc,"App.activeDocument().%s.Member = App.activeDocument().%s.Member + [App.activeDocument().%s]",
+                             Analysis->getNameInDocument(),Analysis->getNameInDocument(),FeatName.c_str());
+
+    doCommand(Doc,"%s",gethideMeshShowPartStr(FeatName).c_str()); //OvG: Hide meshes and show parts
+    updateActive();
+
+    doCommand(Gui,"Gui.activeDocument().setEdit('%s')",FeatName.c_str());
+}
+
+bool CmdFemConstraintFluidBoundary::isActive(void)
+{
+    return FemGui::ActiveAnalysisObserver::instance()->hasActiveObject();
+}
+
+
 //=====================================================================================
 
 DEF_STD_CMD_A(CmdFemConstraintPressure);
@@ -541,7 +630,7 @@ CmdFemConstraintPressure::CmdFemConstraintPressure()
     sPixmap         = "fem-constraint-pressure";
 }
 
-void CmdFemConstraintPressure::activated(int iMsg)
+void CmdFemConstraintPressure::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -586,7 +675,7 @@ CmdFemConstraintGear::CmdFemConstraintGear()
     sPixmap         = "fem-constraint-gear";
 }
 
-void CmdFemConstraintGear::activated(int iMsg)
+void CmdFemConstraintGear::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -627,7 +716,7 @@ CmdFemConstraintPulley::CmdFemConstraintPulley()
     sPixmap         = "fem-constraint-pulley";
 }
 
-void CmdFemConstraintPulley::activated(int iMsg)
+void CmdFemConstraintPulley::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -672,7 +761,7 @@ CmdFemConstraintDisplacement::CmdFemConstraintDisplacement()
     sPixmap         = "fem-constraint-displacement";
 }
 
-void CmdFemConstraintDisplacement::activated(int iMsg)
+void CmdFemConstraintDisplacement::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -709,13 +798,13 @@ CmdFemConstraintTemperature::CmdFemConstraintTemperature()
     sAppModule      = "Fem";
     sGroup          = QT_TR_NOOP("Fem");
     sMenuText       = QT_TR_NOOP("Constraint temperature ");
-    sToolTipText    = QT_TR_NOOP("Creates a FEM constraint for a temperature acting on a face");
+    sToolTipText    = QT_TR_NOOP("Creates a FEM constraint for a temperature/concentrated heat flux acting on a face");
     sWhatsThis      = "Fem_ConstraintTemperature";
     sStatusTip      = sToolTipText;
     sPixmap         = "fem-constraint-temperature";
 }
 
-void CmdFemConstraintTemperature::activated(int iMsg)
+void CmdFemConstraintTemperature::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -758,7 +847,7 @@ CmdFemConstraintInitialTemperature::CmdFemConstraintInitialTemperature()
     sPixmap         = "fem-constraint-InitialTemperature";
 }
 
-void CmdFemConstraintInitialTemperature::activated(int iMsg)
+void CmdFemConstraintInitialTemperature::activated(int)
 {
     Fem::FemAnalysis        *Analysis;
 
@@ -817,16 +906,16 @@ void DefineNodesCallback(void * ud, SoEventCallback * n)
     SoCamera* cam = view->getSoRenderManager()->getCamera();
     SbViewVolume vv = cam->getViewVolume();
     Gui::ViewVolumeProjection proj(vv);
-    Base::Polygon2D polygon;
+    Base::Polygon2d polygon;
     for (std::vector<SbVec2f>::const_iterator it = clPoly.begin(); it != clPoly.end(); ++it)
-        polygon.Add(Base::Vector2D((*it)[0],(*it)[1]));
+        polygon.Add(Base::Vector2d((*it)[0],(*it)[1]));
 
 
     std::vector<App::DocumentObject*> docObj = Gui::Selection().getObjectsOfType(Fem::FemMeshObject::getClassTypeId());
     if(docObj.size() !=1)
         return;
 
-    const SMESHDS_Mesh* data = const_cast<SMESH_Mesh*>(dynamic_cast<Fem::FemMeshObject*>(docObj[0])->FemMesh.getValue().getSMesh())->GetMeshDS();
+    const SMESHDS_Mesh* data = const_cast<SMESH_Mesh*>(static_cast<Fem::FemMeshObject*>(docObj[0])->FemMesh.getValue().getSMesh())->GetMeshDS();
 
     SMDS_NodeIteratorPtr aNodeIter = data->nodesIterator();
     Base::Vector3f pt2d;
@@ -836,7 +925,7 @@ void DefineNodesCallback(void * ud, SoEventCallback * n)
         const SMDS_MeshNode* aNode = aNodeIter->next();
         Base::Vector3f vec(aNode->X(),aNode->Y(),aNode->Z());
         pt2d = proj(vec);
-        if (polygon.Contains(Base::Vector2D(pt2d.x, pt2d.y)) == true)
+        if (polygon.Contains(Base::Vector2d(pt2d.x, pt2d.y)) == true)
             IntSet.insert(aNode->GetID());
     }
 
@@ -886,10 +975,10 @@ CmdFemDefineNodesSet::CmdFemDefineNodesSet()
     sToolTipText  = QT_TR_NOOP("Create node set by Poly");
     sWhatsThis    = "Create node set by Poly";
     sStatusTip    = QT_TR_NOOP("Create node set by Poly");
-    sPixmap       = "fem-fem-mesh-create-node-by-poly";
+    sPixmap       = "fem-femmesh-create-node-by-poly";
 }
 
-void CmdFemDefineNodesSet::activated(int iMsg)
+void CmdFemDefineNodesSet::activated(int)
 {
     std::vector<App::DocumentObject*> docObj = Gui::Selection().getObjectsOfType(Fem::FemMeshObject::getClassTypeId());
 
@@ -943,10 +1032,10 @@ CmdFemCreateNodesSet::CmdFemCreateNodesSet()
     sToolTipText    = QT_TR_NOOP("Creates a FEM mesh nodes set");
     sWhatsThis      = "Fem_CreateNodesSet";
     sStatusTip      = sToolTipText;
-    sPixmap         = "fem-fem-mesh-create-node-by-poly";
+    sPixmap         = "fem-femmesh-create-node-by-poly";
 }
 
-void CmdFemCreateNodesSet::activated(int iMsg)
+void CmdFemCreateNodesSet::activated(int)
 {
     Gui::SelectionFilter ObjectFilter("SELECT Fem::FemSetNodesObject COUNT 1");
     Gui::SelectionFilter FemMeshFilter("SELECT Fem::FemMeshObject COUNT 1");
@@ -1010,6 +1099,63 @@ void setupFilter(Gui::Command* cmd, std::string Name) {
 
 };
 
+std::string Plot() {
+
+return "t=t_coords[len(t_coords)-1]\n\
+for i in range(len(t_coords)):\n\
+    dum = t_coords[i]\n\
+    t_coords[i] = dum - t_coords[len(t_coords)-1]*0.5\n\
+m = 0\n\
+for i in range(len(sValues)-1):\n\
+    m = m +(t_coords[i+1] - t_coords[i])*(sValues[i+1]+sValues[i])\n\
+m = (1/t)*0.5*m\n\
+membrane = []\n\
+for i in range(len(sValues)):\n\
+    membrane.append(m)\n\
+b = 0\n\
+for i in range(len(sValues)-1):\n\
+    d = (t_coords[i+1] - t_coords[i])\n\
+    b = b + d*(-3/t**2)*(sValues[i+1]*t_coords[i+1] + sValues[i]*t_coords[i])\n\
+b2 = -b\n\
+bending =[]\n\
+for i in range(len(t_coords)):\n\
+    func = ((b2-b)/t)*t_coords[i]\n\
+    bending.append(func)\n\
+peak = []\n\
+mb = []\n\
+for i in range(len(sValues)):\n\
+    peak.append(sValues[i])\n\
+    mb.append(bending[i] + membrane[0])\n\
+import FreeCAD\n\
+import numpy as np\n\
+from matplotlib import pyplot as plt\n\
+plt.figure(1)\n\
+plt.plot(t_coords, membrane, \"k--\")\n\
+plt.plot(t_coords, mb, \"b*-\")\n\
+plt.plot(t_coords, peak, \"r-x\")\n\
+plt.annotate(str(round(membrane[0],2)), xy=(t_coords[0], membrane[0]), xytext=(t_coords[0], membrane[0]))\n\
+plt.annotate(str(round(mb[0],2)), xy=(t_coords[0], mb[0]), xytext=(t_coords[0], mb[0]))\n\
+plt.annotate(str(round(mb[len(t_coords)-1],2)), xy=(t_coords[len(t_coords)-1], mb[len(t_coords)-1]), xytext=(t_coords[len(t_coords)-1], mb[len(t_coords)-1]))\n\
+plt.annotate(str(round(peak[0],2)), xy=(t_coords[0], peak[0]), xytext=(t_coords[0], peak[0]))\n\
+plt.annotate(str(round(peak[len(t_coords)-1],2)), xy=(t_coords[len(t_coords)-1], peak[len(t_coords)-1]), xytext=(t_coords[len(t_coords)-1], peak[len(t_coords)-1]))\n\
+FreeCAD.Console.PrintError('membrane stress = ')\n\
+FreeCAD.Console.PrintError([str(round(membrane[0],2))])\n\
+FreeCAD.Console.PrintError('membrane + bending min = ')\n\
+FreeCAD.Console.PrintError([str(round(mb[0],2))])\n\
+FreeCAD.Console.PrintError('membrane + bending  max = ')\n\
+FreeCAD.Console.PrintError([str(round(mb[len(t_coords)-1],2))])\n\
+FreeCAD.Console.PrintError('Total stress min = ')\n\
+FreeCAD.Console.PrintError([str(round(peak[0],2))])\n\
+FreeCAD.Console.PrintError('Total stress max = ')\n\
+FreeCAD.Console.PrintError([str(round(peak[len(t_coords)-1],2))])\n\
+plt.legend([\"Membrane\", \"Membrane and Bending\", \"Total\"], loc = \"best\")\n\
+plt.xlabel(\"Thickness [mm] \")\n\
+plt.ylabel(\"Stress [MPa]\")\n\
+plt.title(\"Linearized Stresses\")\n\
+plt.grid()\n\
+plt.show()\n";
+}
+
 DEF_STD_CMD_A(CmdFemPostCreateClipFilter);
 
 CmdFemPostCreateClipFilter::CmdFemPostCreateClipFilter()
@@ -1024,12 +1170,81 @@ CmdFemPostCreateClipFilter::CmdFemPostCreateClipFilter()
     sPixmap         = "fem-clip";
 }
 
-void CmdFemPostCreateClipFilter::activated(int iMsg)
+void CmdFemPostCreateClipFilter::activated(int)
 {
     setupFilter(this, "Clip");
 }
 
 bool CmdFemPostCreateClipFilter::isActive(void)
+{
+    return hasActiveDocument();
+}
+
+DEF_STD_CMD_A(CmdFemPostCreateDataAlongLineFilter);
+
+CmdFemPostCreateDataAlongLineFilter::CmdFemPostCreateDataAlongLineFilter()
+  : Command("Fem_PostCreateDataAlongLineFilter")
+{
+    sAppModule      = "Fem";
+    sGroup          = QT_TR_NOOP("Fem");
+    sMenuText       = QT_TR_NOOP("Define/create a clip filter which clips a field along a line");
+    sToolTipText    = QT_TR_NOOP("Define/create a clip filter which clips a field along a line");
+    sWhatsThis      = "Fem_PostCreateDataAlongLineFilter";
+    sStatusTip      = sToolTipText;
+    sPixmap         = "fem-DataAlongLine";
+}
+
+void CmdFemPostCreateDataAlongLineFilter::activated(int)
+{
+    setupFilter(this, "DataAlongLine");
+}
+
+bool CmdFemPostCreateDataAlongLineFilter::isActive(void)
+{
+    return hasActiveDocument();
+}
+
+DEF_STD_CMD_A(CmdFemPostCreateLinearizedStressesFilter);
+
+CmdFemPostCreateLinearizedStressesFilter::CmdFemPostCreateLinearizedStressesFilter()
+  : Command("Fem_PostCreateLinearizedStressesFilter")
+{
+    sAppModule      = "Fem";
+    sGroup          = QT_TR_NOOP("Fem");
+    sMenuText       = QT_TR_NOOP("Create stress linearization plots");
+    sToolTipText    = QT_TR_NOOP("Create stress linearization plots");
+    sWhatsThis      = "Fem_PostCreateLinearizedStressesFilter";
+    sStatusTip      = sToolTipText;
+    sPixmap         = "fem-linearizedstresses";
+}
+
+void CmdFemPostCreateLinearizedStressesFilter::activated(int)
+{
+
+    Gui::SelectionFilter DataAlongLineFilter("SELECT Fem::FemPostDataAlongLineFilter COUNT 1");
+
+    if (DataAlongLineFilter.match()) {
+        Fem::FemPostDataAlongLineFilter* DataAlongLine = static_cast<Fem::FemPostDataAlongLineFilter*>(DataAlongLineFilter.Result[0][0].getObject());
+        std::string FieldName = DataAlongLine->PlotData.getValue();
+        if  ((FieldName == "Max shear stress (Tresca)") || (FieldName == "Maximum Principal stress") || (FieldName == "Minimum Principal stress") || (FieldName == "Von Mises stress")) {
+             doCommand(Gui::Command::Doc,"t_coords = App.ActiveDocument.DataAlongLine.XAxisData");
+             doCommand(Gui::Command::Doc,"sValues = App.ActiveDocument.DataAlongLine.YAxisData");
+             doCommand(Gui::Command::Doc, Plot().c_str());
+        } else {
+                QMessageBox::warning(Gui::getMainWindow(),
+                    qApp->translate("CmdFemPostCreateLinearizedStressesFilter", "Wrong selection"),
+                    qApp->translate("CmdFemPostCreateLinearizedStressesFilter", "Select a Clip filter which clips a STRESS field along a line, please."));
+        }
+}
+    else {
+        QMessageBox::warning(Gui::getMainWindow(),
+            qApp->translate("CmdFemPostCreateLinearizedStressesFilter", "Wrong selection"),
+            qApp->translate("CmdFemPostCreateLinearizedStressesFilter", "Select a Clip filter which clips a STRESS field along a line, please."));
+    }
+
+}
+
+bool CmdFemPostCreateLinearizedStressesFilter::isActive(void)
 {
     return hasActiveDocument();
 }
@@ -1048,7 +1263,7 @@ CmdFemPostCreateScalarClipFilter::CmdFemPostCreateScalarClipFilter()
     sPixmap         = "fem-clip-scalar";
 }
 
-void CmdFemPostCreateScalarClipFilter::activated(int iMsg)
+void CmdFemPostCreateScalarClipFilter::activated(int)
 {
     setupFilter(this, "ScalarClip");
 }
@@ -1074,7 +1289,7 @@ CmdFemPostWarpVectorFilter::CmdFemPostWarpVectorFilter()
     sPixmap         = "fem-warp";
 }
 
-void CmdFemPostWarpVectorFilter::activated(int iMsg)
+void CmdFemPostWarpVectorFilter::activated(int)
 {
     setupFilter(this, "WarpVector");
 }
@@ -1098,7 +1313,7 @@ CmdFemPostCutFilter::CmdFemPostCutFilter()
     sPixmap         = "fem-cut";
 }
 
-void CmdFemPostCutFilter::activated(int iMsg)
+void CmdFemPostCutFilter::activated(int)
 {
     setupFilter(this, "Cut");
 }
@@ -1308,15 +1523,27 @@ CmdFemPostPipelineFromResult::CmdFemPostPipelineFromResult()
     sPixmap         = "fem-data";
 }
 
-void CmdFemPostPipelineFromResult::activated(int iMsg)
+void CmdFemPostPipelineFromResult::activated(int)
 {
+    /*
     Gui::SelectionFilter ResultFilter("SELECT Fem::FemResultObject COUNT 1");
-
     if (ResultFilter.match()) {
-
+        Base::Console().Message("Debug: `SELECT Fem::FemResultObject COUNT 1` has matched obj");
         Fem::FemResultObject* result = static_cast<Fem::FemResultObject*>(ResultFilter.Result[0][0].getObject());
-        std::string FeatName = getUniqueObjectName("Pipeline");
+        //static_cast failed here
+        Base::Console().Message("Debug: FemResultObject pointer = %p", result );
 
+    */
+    App::Document* pcDoc = App::GetApplication().getActiveDocument();
+    if(!pcDoc)
+    {
+        Base::Console().Message("No active document is found thus do nothing and return\n");
+        return;
+    }
+    Fem::FemResultObject* result= static_cast<Fem::FemResultObject*>(pcDoc->getActiveObject());
+    if(result)
+    {
+        std::string FeatName = getUniqueObjectName("Pipeline");
         openCommand("Create pipeline from result");
         doCommand(Doc,"App.activeDocument().addObject('Fem::FemPostPipeline','%s')",FeatName.c_str());
 
@@ -1328,8 +1555,8 @@ void CmdFemPostPipelineFromResult::activated(int iMsg)
     }
     else {
         QMessageBox::warning(Gui::getMainWindow(),
-            qApp->translate("CmdFemPostCreateClipFilter", "Wrong selection"),
-            qApp->translate("CmdFemPostCreateClipFilter", "Select a result, please."));
+            qApp->translate("CmdFemPostPipelineFromResult", "Wrong selection type"),
+            qApp->translate("CmdFemPostPipelineFromResult", "Select a result object, please."));
     }
 }
 
@@ -1363,9 +1590,12 @@ void CreateFemCommands(void)
     rcCmdMgr.addCommand(new CmdFemConstraintInitialTemperature());
     rcCmdMgr.addCommand(new CmdFemConstraintPlaneRotation());
     rcCmdMgr.addCommand(new CmdFemConstraintContact());
-
+    rcCmdMgr.addCommand(new CmdFemConstraintFluidBoundary());
+    rcCmdMgr.addCommand(new CmdFemConstraintTransform());
 #ifdef FC_USE_VTK
     rcCmdMgr.addCommand(new CmdFemPostCreateClipFilter);
+    rcCmdMgr.addCommand(new CmdFemPostCreateDataAlongLineFilter);
+    rcCmdMgr.addCommand(new CmdFemPostCreateLinearizedStressesFilter);
     rcCmdMgr.addCommand(new CmdFemPostCreateScalarClipFilter);
     rcCmdMgr.addCommand(new CmdFemPostWarpVectorFilter);
     rcCmdMgr.addCommand(new CmdFemPostFunctions);

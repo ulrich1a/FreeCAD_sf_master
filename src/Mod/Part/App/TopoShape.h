@@ -154,11 +154,14 @@ public:
     /** @name Boolean operation*/
     //@{
     TopoDS_Shape cut(TopoDS_Shape) const;
+    TopoDS_Shape cut(const std::vector<TopoDS_Shape>&, Standard_Real tolerance = 0.0) const;
     TopoDS_Shape common(TopoDS_Shape) const;
+    TopoDS_Shape common(const std::vector<TopoDS_Shape>&, Standard_Real tolerance = 0.0) const;
     TopoDS_Shape fuse(TopoDS_Shape) const;
-    TopoDS_Shape multiFuse(const std::vector<TopoDS_Shape>&, Standard_Real tolerance = 0.0) const;
+    TopoDS_Shape fuse(const std::vector<TopoDS_Shape>&, Standard_Real tolerance = 0.0) const;
     TopoDS_Shape oldFuse(TopoDS_Shape) const;
     TopoDS_Shape section(TopoDS_Shape) const;
+    TopoDS_Shape section(const std::vector<TopoDS_Shape>&, Standard_Real tolerance = 0.0) const;
     std::list<TopoDS_Wire> slice(const Base::Vector3d&, double) const;
     TopoDS_Compound slices(const Base::Vector3d&, const std::vector<double>&) const;
     /**
@@ -191,6 +194,7 @@ public:
     TopoDS_Shape makePipeShell(const TopTools_ListOfShape& profiles, const Standard_Boolean make_solid,
         const Standard_Boolean isFrenet = Standard_False, int transition=0) const;
     TopoDS_Shape makePrism(const gp_Vec&) const;
+    ///revolve shape. Note: isSolid is deprecated (instead, use some Part::FaceMaker to make a face, first).
     TopoDS_Shape revolve(const gp_Ax1&, double d, Standard_Boolean isSolid=Standard_False) const;
     TopoDS_Shape makeSweep(const TopoDS_Shape& profile, double, int) const;
     TopoDS_Shape makeTube(double radius, double tol, int cont, int maxdeg, int maxsegm) const;
@@ -207,6 +211,8 @@ public:
     TopoDS_Shape makeOffsetShape(double offset, double tol,
         bool intersection = false, bool selfInter = false,
         short offsetMode = 0, short join = 0, bool fill = false) const;
+    TopoDS_Shape makeOffset2D(double offset, short joinType = 0,
+        bool fill = false, bool allowOpenResult = false, bool intersection = false) const;
     TopoDS_Shape makeThickSolid(const TopTools_ListOfShape& remFace,
         double offset, double tol,
         bool intersection = false, bool selfInter = false,

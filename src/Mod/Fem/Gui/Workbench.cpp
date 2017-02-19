@@ -50,38 +50,55 @@ Workbench::~Workbench()
 {
 }
 
+void Workbench::setupContextMenu(const char* recipient, Gui::MenuItem* item) const
+{
+     StdWorkbench::setupContextMenu( recipient, item );
+     *item << "Separator"
+           << "Fem_ClearMesh"
+           << "Fem_PrintMeshInfo";
+}
+
 Gui::ToolBarItem* Workbench::setupToolBars() const
 {
     Gui::ToolBarItem* root = StdWorkbench::setupToolBars();
     Gui::ToolBarItem* fem = new Gui::ToolBarItem(root);
     fem->setCommand("FEM");
-    *fem << "Fem_Analysis"
+    *fem << "Fem_FemMesh2Mesh"
+         << "Fem_Analysis"
          << "Fem_SolverCalculix"
          // << "Fem_SolverZ88"
-         << "Fem_MeshFromShape"
-         << "Fem_MechanicalMaterial"
+         << "Separator"
+         << "Fem_MeshNetgenFromShape"
+         << "Fem_MeshGmshFromShape"
+         << "Fem_MeshRegion"
+         << "Fem_MeshGroup"
+         //<< "Fem_CreateNodesSet"
+         << "Separator"
+         << "Fem_MaterialSolid"
+         << "Fem_MaterialFluid"
+         << "Fem_MaterialMechanicalNonlinear"
          << "Fem_BeamSection"
          << "Fem_ShellThickness"
-         << "Separator"
-         << "Fem_CreateNodesSet"
          << "Separator"
          << "Fem_ConstraintFixed"
          << "Fem_ConstraintDisplacement"
          << "Fem_ConstraintPlaneRotation"
-	 << "Fem_ConstraintContact"
+         << "Fem_ConstraintContact"
+         << "Fem_ConstraintTransform"
          << "Separator"
          << "Fem_ConstraintSelfWeight"
          << "Fem_ConstraintForce"
          << "Fem_ConstraintPressure"
-         << "Separator"
-         << "Fem_ConstraintBearing"
-         << "Fem_ConstraintGear"
-         << "Fem_ConstraintPulley"
+         //<< "Separator"
+         //<< "Fem_ConstraintBearing"
+         //<< "Fem_ConstraintGear"
+         //<< "Fem_ConstraintPulley"
+         //<< "Fem_ConstraintFluidBoundary"
          << "Separator"
          << "Fem_ConstraintTemperature"
          << "Fem_ConstraintHeatflux"
-	 << "Fem_ConstraintInitialTemperature"
-	 << "Separator"
+         << "Fem_ConstraintInitialTemperature"
+         << "Separator"
          << "Fem_ControlSolver"
          << "Fem_RunSolver"
          << "Separator"
@@ -98,6 +115,8 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
             << "Fem_PostCreateScalarClipFilter"
             << "Fem_PostCreateCutFilter"
             << "Fem_PostCreateWarpVectorFilter"
+            << "Fem_PostCreateDataAlongLineFilter"
+            << "Fem_PostCreateLinearizedStressesFilter"
             << "Separator"
             << "Fem_PostCreateFunctions";
 #endif
@@ -109,23 +128,37 @@ Gui::MenuItem* Workbench::setupMenuBar() const
 {
     Gui::MenuItem* root = StdWorkbench::setupMenuBar();
     Gui::MenuItem* item = root->findItem("&Windows");
+
+    Gui::MenuItem* util = new Gui::MenuItem;
+    util->setCommand("&Utilities");
+    *util << "Fem_FemMesh2Mesh";
+
     Gui::MenuItem* fem = new Gui::MenuItem;
     root->insertItem(item, fem);
     fem->setCommand("&FEM");
-    *fem << "Fem_Analysis"
+    *fem << util
+         << "Separator"
+         << "Fem_Analysis"
          << "Fem_SolverCalculix"
          << "Fem_SolverZ88"
-         << "Fem_MeshFromShape"
-         << "Fem_MechanicalMaterial"
+         << "Separator"
+         << "Fem_MeshNetgenFromShape"
+         << "Fem_MeshGmshFromShape"
+         << "Fem_MeshRegion"
+         << "Fem_MeshGroup"
+         << "Fem_CreateNodesSet"
+         << "Separator"
+         << "Fem_MaterialSolid"
+         << "Fem_MaterialFluid"
+         << "Fem_MaterialMechanicalNonlinear"
          << "Fem_BeamSection"
          << "Fem_ShellThickness"
-         << "Separator"
-         << "Fem_CreateNodesSet"
          << "Separator"
          << "Fem_ConstraintFixed"
          << "Fem_ConstraintDisplacement"
          << "Fem_ConstraintPlaneRotation"
-	 << "Fem_ConstraintContact"
+         << "Fem_ConstraintContact"
+         << "Fem_ConstraintTransform"
          << "Separator"
          << "Fem_ConstraintSelfWeight"
          << "Fem_ConstraintForce"
@@ -135,10 +168,12 @@ Gui::MenuItem* Workbench::setupMenuBar() const
          << "Fem_ConstraintGear"
          << "Fem_ConstraintPulley"
          << "Separator"
+         << "Fem_ConstraintFluidBoundary"
+         << "Separator"
          << "Fem_ConstraintTemperature"
          << "Fem_ConstraintHeatflux"
-	 << "Fem_ConstraintInitialTemperature"
-	 << "Separator"
+         << "Fem_ConstraintInitialTemperature"
+         << "Separator"
          << "Fem_ControlSolver"
          << "Fem_RunSolver"
          << "Separator"

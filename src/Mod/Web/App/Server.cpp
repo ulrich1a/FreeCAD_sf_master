@@ -56,7 +56,7 @@ Firewall::~Firewall()
 {
 }
 
-bool Firewall::filter(const QByteArray& cmd) const
+bool Firewall::filter(const QByteArray&) const
 {
     return true;
 }
@@ -114,7 +114,11 @@ AppServer::AppServer(QObject* parent)
 {
 }
 
+#if QT_VERSION >=0x050000
+void AppServer::incomingConnection(qintptr socket)
+#else
 void AppServer::incomingConnection(int socket)
+#endif
 {
     QTcpSocket* s = new QTcpSocket(this);
     connect(s, SIGNAL(readyRead()), this, SLOT(readClient()));

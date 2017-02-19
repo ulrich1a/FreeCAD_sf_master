@@ -67,6 +67,7 @@
 #include "FemMeshPy.h"
 #ifdef FC_USE_VTK
 #include "FemPostPipeline.h"
+#include "FemVTKTools.h"
 #endif
 
 #include <cstdlib>
@@ -93,6 +94,14 @@ public:
         add_varargs_method("read",&Module::read,
             "Read a mesh from a file and returns a Mesh object."
         );
+#ifdef FC_USE_VTK
+        add_varargs_method("readResult",&Module::readResult,
+            "Read a CFD or Mechanical result (auto detect) from a file (file format detected from file suffix)"
+        );
+        add_varargs_method("writeResult",&Module::writeResult,
+            "write a CFD or FEM result (auto detect) to a file (file format detected from file suffix)"
+        );
+#endif
         add_varargs_method("show",&Module::show,
             "show(shape) -- Add the shape to the active document or create one if no document exists."
         );
@@ -132,7 +141,7 @@ private:
         std::string EncodedName = std::string(Name);
         PyMem_Free(Name);
 
-        std::auto_ptr<FemMesh> mesh(new FemMesh);
+        std::unique_ptr<FemMesh> mesh(new FemMesh);
         mesh->read(EncodedName.c_str());
         Base::FileInfo file(EncodedName.c_str());
         // create new document and add Import feature
@@ -140,8 +149,7 @@ private:
         FemMeshObject *pcFeature = static_cast<FemMeshObject *>
             (pcDoc->addObject("Fem::FemMeshObject", file.fileNamePure().c_str()));
         pcFeature->Label.setValue(file.fileNamePure().c_str());
-        pcFeature->FemMesh.setValuePtr(mesh.get());
-        (void)mesh.release();
+        pcFeature->FemMesh.setValuePtr(mesh.release());
         pcFeature->purgeTouched();
 
         return Py::None();
@@ -169,14 +177,13 @@ private:
         Base::FileInfo file(EncodedName.c_str());
 
         try {
-            std::auto_ptr<FemMesh> mesh(new FemMesh);
+            std::unique_ptr<FemMesh> mesh(new FemMesh);
             mesh->read(EncodedName.c_str());
 
             FemMeshObject *pcFeature = static_cast<FemMeshObject *>
                 (pcDoc->addObject("Fem::FemMeshObject", file.fileNamePure().c_str()));
             pcFeature->Label.setValue(file.fileNamePure().c_str());
-            pcFeature->FemMesh.setValuePtr(mesh.get());
-            (void)mesh.release();
+            pcFeature->FemMesh.setValuePtr(mesh.release());
             pcFeature->purgeTouched();
         }
         catch(Base::Exception& e) {
@@ -234,10 +241,61 @@ private:
         std::string EncodedName = std::string(Name);
         PyMem_Free(Name);
 
-        std::auto_ptr<FemMesh> mesh(new FemMesh);
+        std::unique_ptr<FemMesh> mesh(new FemMesh);
         mesh->read(EncodedName.c_str());
         return Py::asObject(new FemMeshPy(mesh.release()));
     }
+
+#ifdef FC_USE_VTK
+    Py::Object readResult(const Py::Tuple& args)
+    {
+        char* fileName = NULL;
+        char* objName = NULL;
+
+        if (!PyArg_ParseTuple(args.ptr(), "et|et","utf-8", &fileName, "utf-8", &objName))
+            throw Py::Exception();
+        std::string EncodedName = std::string(fileName);
+        PyMem_Free(fileName);
+        std::string resName = std::string(objName);
+        PyMem_Free(objName);
+
+        if (resName.length())
+        {
+            App::Document* pcDoc = App::GetApplication().getActiveDocument();
+            App::DocumentObject* obj = pcDoc->getObject(resName.c_str());
+            FemVTKTools::readResult(EncodedName.c_str(), obj);
+        }
+        else
+            FemVTKTools::readResult(EncodedName.c_str());  // assuming activeObject can hold Result
+
+        return Py::None();
+    }
+
+    Py::Object writeResult(const Py::Tuple& args)
+    {
+        char* fileName = NULL;
+        PyObject *pcObj = NULL;
+
+        if (!PyArg_ParseTuple(args.ptr(), "et|O!","utf-8", &fileName, &(App::DocumentObjectPy::Type), &pcObj))
+            throw Py::Exception();
+        std::string EncodedName = std::string(fileName);
+        PyMem_Free(fileName);
+
+        if (pcObj)
+        {
+            if (PyObject_TypeCheck(pcObj, &(App::DocumentObjectPy::Type)))
+            {
+                App::DocumentObject* obj = static_cast<App::DocumentObjectPy*>(pcObj)->getDocumentObjectPtr();
+                FemVTKTools::writeResult(EncodedName.c_str(), obj);
+            }
+        }
+        else
+            FemVTKTools::writeResult(EncodedName.c_str());
+
+        return Py::None();
+    }
+#endif
+
     Py::Object show(const Py::Tuple& args)
     {
         PyObject *pcObj;

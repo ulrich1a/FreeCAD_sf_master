@@ -64,7 +64,7 @@ Workbench::~Workbench() {
     WorkflowManager::destruct();
 }
 
-void Workbench::_switchToDocument(const App::Document* doc)
+void Workbench::_switchToDocument(const App::Document* /*doc*/)
 {
 // TODO Commented out for thurther remove or rewrite  (2015-09-04, Fat-Zer)
 //    if (doc == NULL) return;
@@ -119,17 +119,17 @@ void Workbench::_switchToDocument(const App::Document* doc)
 //    }*/
 }
 
-void Workbench::slotActiveDocument(const Gui::Document& Doc)
+void Workbench::slotActiveDocument(const Gui::Document& /*Doc*/)
 {
 //     _switchToDocument(Doc.getDocument());
 }
 
-void Workbench::slotNewDocument(const App::Document& Doc)
+void Workbench::slotNewDocument(const App::Document& /*Doc*/)
 {
 //     _switchToDocument(&Doc);
 }
 
-void Workbench::slotFinishRestoreDocument(const App::Document& Doc)
+void Workbench::slotFinishRestoreDocument(const App::Document& /*Doc*/)
 {
 //     _switchToDocument(&Doc);
 }
@@ -151,7 +151,7 @@ void Workbench::slotNewObject(const App::DocumentObject& obj)
     if ((obj.getDocument() == ActiveAppDoc) && (ActivePartObject != NULL)) {
         // Add the new object to the active Body
         // Note: Will this break Undo? But how else can we catch Edit->Duplicate selection?
-        Gui::Command::doCommand(Gui::Command::Doc,"App.activeDocument().%s.addFeature(App.activeDocument().%s)",
+        Gui::Command::doCommand(Gui::Command::Doc,"App.activeDocument().%s.addObject(App.activeDocument().%s)",
                                 ActivePartObject->getNameInDocument(), obj.getNameInDocument());
     }
 }
@@ -193,7 +193,7 @@ void Workbench::setupContextMenu(const char* recipient, Gui::MenuItem* item) con
                         }
                         // if all at lest one selected feature doesn't belongs to the same body
                         // disable the menu entry
-                        if ( addMoveFeatureInTree && !body->hasFeature ( sel.pObject ) ) {
+                        if ( addMoveFeatureInTree && !body->hasObject ( sel.pObject ) ) {
                             addMoveFeatureInTree = false;
                         }
 

@@ -86,6 +86,8 @@ void ViewProviderBoolean::updateData(const App::Property* prop)
         if (hist.size() != 2)
             return;
         Part::Boolean* objBool = dynamic_cast<Part::Boolean*>(getObject());
+        if (!objBool)
+            return;
         Part::Feature* objBase = dynamic_cast<Part::Feature*>(objBool->Base.getValue());
         Part::Feature* objTool = dynamic_cast<Part::Feature*>(objBool->Tool.getValue());
         if (objBase && objTool) {
@@ -104,6 +106,8 @@ void ViewProviderBoolean::updateData(const App::Property* prop)
             std::vector<App::Color> colTool = static_cast<PartGui::ViewProviderPart*>(vpTool)->DiffuseColor.getValues();
             std::vector<App::Color> colBool;
             colBool.resize(boolMap.Extent(), this->ShapeColor.getValue());
+            applyTransparency(static_cast<PartGui::ViewProviderPart*>(vpBase)->Transparency.getValue(),colBase);
+            applyTransparency(static_cast<PartGui::ViewProviderPart*>(vpTool)->Transparency.getValue(),colTool);
 
             bool setColor=false;
             if (static_cast<int>(colBase.size()) == baseMap.Extent()) {
@@ -176,7 +180,7 @@ void ViewProviderMultiFuse::updateData(const App::Property* prop)
     if (prop->getTypeId() == Part::PropertyShapeHistory::getClassTypeId()) {
         const std::vector<Part::ShapeHistory>& hist = static_cast<const Part::PropertyShapeHistory*>
             (prop)->getValues();
-        Part::MultiFuse* objBool = dynamic_cast<Part::MultiFuse*>(getObject());
+        Part::MultiFuse* objBool = static_cast<Part::MultiFuse*>(getObject());
         std::vector<App::DocumentObject*> sources = objBool->Shapes.getValues();
         if (hist.size() != sources.size())
             return;
@@ -192,6 +196,8 @@ void ViewProviderMultiFuse::updateData(const App::Property* prop)
         int index=0;
         for (std::vector<App::DocumentObject*>::iterator it = sources.begin(); it != sources.end(); ++it, ++index) {
             Part::Feature* objBase = dynamic_cast<Part::Feature*>(*it);
+            if (!objBase)
+                continue;
             const TopoDS_Shape& baseShape = objBase->Shape.getValue();
  
             TopTools_IndexedMapOfShape baseMap;
@@ -199,6 +205,7 @@ void ViewProviderMultiFuse::updateData(const App::Property* prop)
 
             Gui::ViewProvider* vpBase = Gui::Application::Instance->getViewProvider(objBase);
             std::vector<App::Color> colBase = static_cast<PartGui::ViewProviderPart*>(vpBase)->DiffuseColor.getValues();
+            applyTransparency(static_cast<PartGui::ViewProviderPart*>(vpBase)->Transparency.getValue(),colBase);
             if (static_cast<int>(colBase.size()) == baseMap.Extent()) {
                 applyColor(hist[index], colBase, colBool);
                 setColor = true;
@@ -240,6 +247,11 @@ bool ViewProviderMultiFuse::canDragObjects() const
     return true;
 }
 
+bool ViewProviderMultiFuse::canDragObject(App::DocumentObject* obj) const
+{
+    return obj->getTypeId().isDerivedFrom(Part::Feature::getClassTypeId());
+}
+
 void ViewProviderMultiFuse::dragObject(App::DocumentObject* obj)
 {
     Part::MultiFuse* pBool = static_cast<Part::MultiFuse*>(getObject());
@@ -256,6 +268,11 @@ void ViewProviderMultiFuse::dragObject(App::DocumentObject* obj)
 bool ViewProviderMultiFuse::canDropObjects() const
 {
     return true;
+}
+
+bool ViewProviderMultiFuse::canDropObject(App::DocumentObject* obj) const
+{
+    return obj->getTypeId().isDerivedFrom(Part::Feature::getClassTypeId());
 }
 
 void ViewProviderMultiFuse::dropObject(App::DocumentObject* obj)
@@ -293,7 +310,7 @@ void ViewProviderMultiCommon::updateData(const App::Property* prop)
     if (prop->getTypeId() == Part::PropertyShapeHistory::getClassTypeId()) {
         const std::vector<Part::ShapeHistory>& hist = static_cast<const Part::PropertyShapeHistory*>
             (prop)->getValues();
-        Part::MultiCommon* objBool = dynamic_cast<Part::MultiCommon*>(getObject());
+        Part::MultiCommon* objBool = static_cast<Part::MultiCommon*>(getObject());
         std::vector<App::DocumentObject*> sources = objBool->Shapes.getValues();
         if (hist.size() != sources.size())
             return;
@@ -309,6 +326,8 @@ void ViewProviderMultiCommon::updateData(const App::Property* prop)
         int index=0;
         for (std::vector<App::DocumentObject*>::iterator it = sources.begin(); it != sources.end(); ++it, ++index) {
             Part::Feature* objBase = dynamic_cast<Part::Feature*>(*it);
+            if (!objBase)
+                continue;
             const TopoDS_Shape& baseShape = objBase->Shape.getValue();
  
             TopTools_IndexedMapOfShape baseMap;
@@ -316,6 +335,7 @@ void ViewProviderMultiCommon::updateData(const App::Property* prop)
 
             Gui::ViewProvider* vpBase = Gui::Application::Instance->getViewProvider(objBase);
             std::vector<App::Color> colBase = static_cast<PartGui::ViewProviderPart*>(vpBase)->DiffuseColor.getValues();
+            applyTransparency(static_cast<PartGui::ViewProviderPart*>(vpBase)->Transparency.getValue(),colBase);
             if (static_cast<int>(colBase.size()) == baseMap.Extent()) {
                 applyColor(hist[index], colBase, colBool);
                 setColor = true;
@@ -357,6 +377,11 @@ bool ViewProviderMultiCommon::canDragObjects() const
     return true;
 }
 
+bool ViewProviderMultiCommon::canDragObject(App::DocumentObject* obj) const
+{
+    return obj->getTypeId().isDerivedFrom(Part::Feature::getClassTypeId());
+}
+
 void ViewProviderMultiCommon::dragObject(App::DocumentObject* obj)
 {
     Part::MultiCommon* pBool = static_cast<Part::MultiCommon*>(getObject());
@@ -373,6 +398,11 @@ void ViewProviderMultiCommon::dragObject(App::DocumentObject* obj)
 bool ViewProviderMultiCommon::canDropObjects() const
 {
     return true;
+}
+
+bool ViewProviderMultiCommon::canDropObject(App::DocumentObject* obj) const
+{
+    return obj->getTypeId().isDerivedFrom(Part::Feature::getClassTypeId());
 }
 
 void ViewProviderMultiCommon::dropObject(App::DocumentObject* obj)

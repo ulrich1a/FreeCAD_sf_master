@@ -78,12 +78,26 @@ void ViewProviderPart::applyColor(const Part::ShapeHistory& hist,
     }
 }
 
+void ViewProviderPart::applyTransparency(const float& transparency,
+                                  std::vector<App::Color>& colors)
+{
+    if (transparency != 0.0) {
+        // transparency has been set object-wide
+        std::vector<App::Color>::iterator j;
+        for (j = colors.begin(); j != colors.end(); ++j) {
+            // transparency hasn't been set for this face
+            if (j->a == 0.0)
+                j->a = transparency/100.0; // transparency comes in percent
+        }
+    }
+}
+
 // ----------------------------------------------------------------------------
 
-void ViewProviderShapeBuilder::buildNodes(const App::Property* prop, std::vector<SoNode*>& nodes) const
+void ViewProviderShapeBuilder::buildNodes(const App::Property* , std::vector<SoNode*>& ) const
 {
 }
 
-void ViewProviderShapeBuilder::createShape(const App::Property* prop, SoSeparator* coords) const
+void ViewProviderShapeBuilder::createShape(const App::Property* , SoSeparator* ) const
 {
 }

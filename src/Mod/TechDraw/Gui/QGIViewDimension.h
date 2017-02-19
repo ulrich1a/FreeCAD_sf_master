@@ -27,6 +27,8 @@
 #include <QGraphicsView>
 #include <QStyleOptionGraphicsItem>
 #include <QGraphicsPathItem>
+#include <QGraphicsRectItem>
+#include <QColor>
 #include <Base/Vector3D.h>
 #include "QGIView.h"
 #include "QGCustomText.h"
@@ -43,6 +45,7 @@ class AOC;
 namespace TechDrawGui
 {
 class QGIArrow;
+class QGIDimLines;
 
 class QGIDatumLabel : public QGCustomText
 {
@@ -69,10 +72,10 @@ Q_SIGNALS:
 protected:
     // Preselection events:
     void mouseReleaseEvent( QGraphicsSceneMouseEvent * event);
-    void hoverEnterEvent(QGraphicsSceneHoverEvent *event);
-    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event);
+    virtual void hoverEnterEvent(QGraphicsSceneHoverEvent *event);
+    virtual void hoverLeaveEvent(QGraphicsSceneHoverEvent *event);
     // Selection detection
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value);
+    virtual QVariant itemChange(GraphicsItemChange change, const QVariant &value);
 
     double posX;
     double posY;
@@ -94,8 +97,9 @@ public:
     int type() const { return Type;}
 
     virtual void drawBorder();
-    virtual void updateView(bool update = false);
+    virtual void updateView(bool update = false) override;
     virtual void paint(QPainter * painter, const QStyleOptionGraphicsItem * option, QWidget * widget = 0 );
+    virtual QColor getNormalColor(void);
 
 public Q_SLOTS:
     void datumLabelDragged(void);
@@ -113,12 +117,11 @@ protected:
 protected:
     bool hasHover;
     QGIDatumLabel* datumLabel;                                         //dimension text
-    QGraphicsPathItem* dimLines;                                       //dimension lines + extension lines
-    QGraphicsPathItem* centerMark;
+    QGIDimLines* dimLines;                                       //dimension lines + extension lines
     QGIArrow* aHead1;
     QGIArrow* aHead2;
-    //QPen m_pen;
-    QPen m_clPen;
+    //QGICMark* centerMark
+    double m_lineWidth;
 };
 
 } // namespace MDIViewPageGui

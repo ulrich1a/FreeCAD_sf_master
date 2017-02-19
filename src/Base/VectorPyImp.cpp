@@ -120,29 +120,43 @@ PyObject* VectorPy::number_subtract_handler(PyObject *self, PyObject *other)
 
 PyObject* VectorPy::number_multiply_handler(PyObject *self, PyObject *other)
 {
-    if (!PyObject_TypeCheck(self, &(VectorPy::Type))) {
-        PyErr_SetString(PyExc_TypeError, "First arg must be Vector");
-        return 0;
-    }
-
-    if (PyObject_TypeCheck(other, &(VectorPy::Type))) {
+    if (PyObject_TypeCheck(self, &(VectorPy::Type))) {
         Base::Vector3d a = static_cast<VectorPy*>(self) ->value();
-        Base::Vector3d b = static_cast<VectorPy*>(other)->value();
-        Py::Float mult(a * b);
-        return Py::new_reference_to(mult);
+        if (PyObject_TypeCheck(other, &(VectorPy::Type))) {
+            Base::Vector3d b = static_cast<VectorPy*>(other)->value();
+            Py::Float mult(a * b);
+            return Py::new_reference_to(mult);
+        }
+        else if (PyFloat_Check(other)) {
+            double b = PyFloat_AsDouble(other);
+            return new VectorPy(a * b);
+        }
+        else if (PyInt_Check(other)) {
+            long b = PyInt_AsLong(other);
+            return new VectorPy(a * (double)b);
+        }
+        else {
+            PyErr_SetString(PyExc_TypeError, "A Vector can only be multiplied by Vector or number");
+            return 0;
+        }
     }
-    else if (PyFloat_Check(other)) {
-        Base::Vector3d a = static_cast<VectorPy*>(self) ->value();
-        double b = PyFloat_AsDouble(other);
-        return new VectorPy(a * b);
-    }
-    else if (PyInt_Check(other)) {
-        Base::Vector3d a = static_cast<VectorPy*>(self) ->value();
-        long b = PyInt_AsLong(other);
-        return new VectorPy(a * (double)b);
+    else if (PyObject_TypeCheck(other, &(VectorPy::Type))) {
+        Base::Vector3d a = static_cast<VectorPy*>(other) ->value();
+        if (PyFloat_Check(self)) {
+            double b = PyFloat_AsDouble(self);
+            return new VectorPy(a * b);
+        }
+        else if (PyInt_Check(self)) {
+            long b = PyInt_AsLong(self);
+            return new VectorPy(a * (double)b);
+        }
+        else {
+            PyErr_SetString(PyExc_TypeError, "A Vector can only be multiplied by Vector or number");
+            return 0;
+        }
     }
     else {
-        PyErr_SetString(PyExc_TypeError, "A Vector can only be multiplied by Vector or number");
+        PyErr_SetString(PyExc_TypeError, "First or second arg must be Vector");
         return 0;
     }
 }
@@ -259,6 +273,22 @@ PyObject* VectorPy::richCompare(PyObject *v, PyObject *w, int op)
         Py_INCREF(Py_NotImplemented);
         return Py_NotImplemented;
     }
+}
+
+PyObject*  VectorPy::isEqual(PyObject *args)
+{
+    PyObject *obj;
+    double tolerance=0;
+    if (!PyArg_ParseTuple(args, "O!d", &(VectorPy::Type), &obj, &tolerance))
+        return 0;
+
+    VectorPy* vec = static_cast<VectorPy*>(obj);
+
+    VectorPy::PointerType this_ptr = reinterpret_cast<VectorPy::PointerType>(_pcTwinPointer);
+    VectorPy::PointerType vect_ptr = reinterpret_cast<VectorPy::PointerType>(vec->_pcTwinPointer);
+
+    Py::Boolean eq((*this_ptr).IsEqual(*vect_ptr, tolerance));
+    return Py::new_reference_to(eq);
 }
 
 PyObject*  VectorPy::scale(PyObject *args)
@@ -550,119 +580,119 @@ int VectorPy::setCustomAttributes(const char* /*attr*/, PyObject* /*obj*/)
     return 0; 
 }
 
-PyObject * VectorPy::number_divide_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_divide_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_remainder_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_remainder_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_divmod_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_divmod_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_power_handler (PyObject *self, PyObject *other, PyObject *arg)
+PyObject * VectorPy::number_power_handler (PyObject* /*self*/, PyObject* /*other*/, PyObject* /*arg*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_negative_handler (PyObject *self)
+PyObject * VectorPy::number_negative_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_positive_handler (PyObject *self)
+PyObject * VectorPy::number_positive_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_absolute_handler (PyObject *self)
+PyObject * VectorPy::number_absolute_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-int VectorPy::number_nonzero_handler (PyObject *self)
+int VectorPy::number_nonzero_handler (PyObject* /*self*/)
 {
     return 1;
 }
 
-PyObject * VectorPy::number_invert_handler (PyObject *self)
+PyObject * VectorPy::number_invert_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_lshift_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_lshift_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_rshift_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_rshift_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_and_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_and_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_xor_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_xor_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_or_handler (PyObject *self, PyObject *other)
+PyObject * VectorPy::number_or_handler (PyObject* /*self*/, PyObject* /*other*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-int VectorPy::number_coerce_handler (PyObject **self, PyObject **other)
+int VectorPy::number_coerce_handler (PyObject ** /*self*/, PyObject ** /*other*/)
 {
     return 1;
 }
 
-PyObject * VectorPy::number_int_handler (PyObject *self)
+PyObject * VectorPy::number_int_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_long_handler (PyObject *self)
+PyObject * VectorPy::number_long_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_float_handler (PyObject *self)
+PyObject * VectorPy::number_float_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_oct_handler (PyObject *self)
+PyObject * VectorPy::number_oct_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;
 }
 
-PyObject * VectorPy::number_hex_handler (PyObject *self)
+PyObject * VectorPy::number_hex_handler (PyObject* /*self*/)
 {
     PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
     return 0;

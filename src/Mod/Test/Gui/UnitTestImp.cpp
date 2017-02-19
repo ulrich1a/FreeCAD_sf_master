@@ -87,6 +87,7 @@ UnitTestDialog::UnitTestDialog(QWidget* parent, Qt::WindowFlags f)
     // we force e.g. the "Motif" style only for the progressbar to change the color to green or red.
     this->progressBar->setStyle(QStyleFactory::create(QString::fromLatin1("Motif")));
     setProgressColor(QColor(40,210,43)); // a darker green
+    this->progressBar->setAlignment(Qt::AlignCenter);
 
     // red items
     QPalette palette;
@@ -117,6 +118,8 @@ void UnitTestDialog::setProgressColor(const QColor& col)
  */
 void UnitTestDialog::on_treeViewFailure_itemDoubleClicked(QTreeWidgetItem * item, int column)
 {
+    Q_UNUSED(column);
+
     QString text = item->data(0, Qt::UserRole).toString();
 
     QMessageBox msgBox(this);

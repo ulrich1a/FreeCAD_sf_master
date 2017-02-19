@@ -36,8 +36,6 @@
 #include <Base/Console.h>
 #include <Base/Parameter.h>
 
-#include <qmath.h>
-#include "QGIView.h"
 #include "QGIEdge.h"
 
 using namespace TechDrawGui;
@@ -46,10 +44,10 @@ QGIEdge::QGIEdge(int index) :
     projIndex(index),
     isCosmetic(false),
     isHiddenEdge(false),
-    isSmoothEdge(false),
-    strokeWidth(1.0)
+    isSmoothEdge(false)
 {
-    m_pen.setCosmetic(isCosmetic);
+    m_width = 1.0;
+    setCosmetic(isCosmetic);
 }
 
 QRectF QGIEdge::boundingRect() const
@@ -70,14 +68,11 @@ QPainterPath QGIEdge::shape() const
 void QGIEdge::setCosmetic(bool state)
 {
     isCosmetic = state;
-    m_pen.setCosmetic(state);
-    update();
+    if (state) {
+        setWidth(0.0);
+    }
 }
 
-void QGIEdge::setStrokeWidth(float width) {
-    strokeWidth = width;
-    update();
-}
 
 void QGIEdge::setHiddenEdge(bool b) {
     isHiddenEdge = b;
@@ -109,7 +104,7 @@ QColor QGIEdge::getHiddenColor()
 Qt::PenStyle QGIEdge::getHiddenStyle()
 {
     Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp")->
-                                         GetGroup("Preferences")->GetGroup("Mod/TechDraw");
+                                         GetGroup("Preferences")->GetGroup("Mod/TechDraw/General");
     Qt::PenStyle hidStyle = static_cast<Qt::PenStyle> (hGrp->GetInt("HiddenLine",2));
     return hidStyle;
 }
@@ -118,6 +113,5 @@ void QGIEdge::paint ( QPainter * painter, const QStyleOptionGraphicsItem * optio
     QStyleOptionGraphicsItem myOption(*option);
     myOption.state &= ~QStyle::State_Selected;
 
-    m_pen.setWidthF(strokeWidth);
     QGIPrimPath::paint (painter, &myOption, widget);
 }

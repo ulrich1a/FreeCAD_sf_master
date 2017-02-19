@@ -24,23 +24,31 @@
 #ifndef GUI_TASKVIEW_TASKVIEWGROUP_H
 #define GUI_TASKVIEW_TASKVIEWGROUP_H
 
+#include <QString>
+
 #include <Base/BoundBox.h>
+#include <Base/Vector3D.h>
 #include <Gui/TaskView/TaskView.h>
 #include <Gui/TaskView/TaskDialog.h>
+
+#include "MDIViewPage.h"
 
 #include <Mod/TechDraw/Gui/ui_TaskProjGroup.h>
 
 #include <Mod/TechDraw/App/DrawProjGroup.h>
+#include <Mod/TechDraw/App/DrawProjGroupItem.h>
 
 
 class Ui_TaskProjGroup;
 
 namespace TechDraw {
-  class DrawProjGroup;
+class DrawProjGroup;
+class DrawPage;
 }
 
 namespace TechDrawGui
 {
+class MDIViewPage;
 class ViewProviderProjGroup;
 
 class TaskProjGroup : public QWidget
@@ -48,14 +56,18 @@ class TaskProjGroup : public QWidget
     Q_OBJECT
 
 public:
-    TaskProjGroup(TechDraw::DrawProjGroup* featView);
+    TaskProjGroup(TechDraw::DrawProjGroup* featView, bool mode);
     ~TaskProjGroup();
 
 public:
+    virtual bool accept();
+    virtual bool reject();
     void updateTask();
     void nearestFraction(double val, int &a, int &b) const;
     /// Sets the numerator and denominator widgets to match newScale
     void setFractionalScale(double newScale);
+    void setCreateMode(bool b) { m_createMode = b;}
+    bool getCreateMode() { return m_createMode; }
 
 protected Q_SLOTS:
     void viewToggled(bool toggle);
@@ -63,9 +75,12 @@ protected Q_SLOTS:
     /// Requests appropriate rotation of our DrawProjGroup
     void rotateButtonClicked(void);
 
+    void on3DClicked(void);
+    void onResetClicked(void);
+    
     void projectionTypeChanged(int index);
     void scaleTypeChanged(int index);
-    void scaleManuallyChanged(const QString & text);
+    void scaleManuallyChanged(int i);
 
 protected:
     void changeEvent(QEvent *e);
@@ -76,6 +91,9 @@ protected:
      * between checkboxes and viewToggled()
      */
     void setupViewCheckboxes(bool addConnections = false);
+    std::pair<Base::Vector3d,Base::Vector3d> get3DViewDir(void);
+    void setUiPrimary(void);
+    QString formatVector(Base::Vector3d v);
 
 private:
     //class Private;
@@ -85,8 +103,12 @@ private:
     const char * viewChkIndexToCStr(int index);
 
 protected:
-  ViewProviderProjGroup *viewProvider;
+  //ViewProviderProjGroup *viewProvider;
   TechDraw::DrawProjGroup* multiView;
+  bool m_createMode;
+  TechDraw::DrawPage* m_page;
+  MDIViewPage* m_mdi;
+
 };
 
 /// Simulation dialog for the TaskView
@@ -95,7 +117,7 @@ class TaskDlgProjGroup : public Gui::TaskView::TaskDialog
     Q_OBJECT
 
 public:
-    TaskDlgProjGroup(TechDraw::DrawProjGroup* featView);
+    TaskDlgProjGroup(TechDraw::DrawProjGroup* featView,bool mode);
     ~TaskDlgProjGroup();
 
     const ViewProviderProjGroup * getViewProvider() const { return viewProvider; }
@@ -113,6 +135,7 @@ public:
     virtual void helpRequested() { return;}
     virtual bool isAllowedAlterDocument(void) const
     { return false; }
+    void setCreateMode(bool b);
 
     void update();
 

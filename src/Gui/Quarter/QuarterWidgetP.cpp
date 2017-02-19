@@ -86,6 +86,7 @@ QuarterWidgetP::QuarterWidgetP(QuarterWidget * masterptr, const QGLWidget * shar
   clearzbuffer(true),
   clearwindow(true),
   addactions(true),
+  device_pixel_ratio(1.0),
   contextmenu(NULL)
 {
   this->cachecontext = findCacheContext(masterptr, sharewidget);
@@ -194,6 +195,7 @@ QuarterWidgetP::rendercb(void * userdata, SoRenderManager *)
 void
 QuarterWidgetP::prerendercb(void * userdata, SoRenderManager * manager)
 {
+  Q_UNUSED(manager); 
   QuarterWidgetP * thisp = static_cast<QuarterWidgetP *>(userdata);
   SoEventManager * evman = thisp->soeventmanager;
   assert(evman);
@@ -206,6 +208,7 @@ QuarterWidgetP::prerendercb(void * userdata, SoRenderManager * manager)
 void
 QuarterWidgetP::postrendercb(void * userdata, SoRenderManager * manager)
 {
+  Q_UNUSED(manager); 
   QuarterWidgetP * thisp = static_cast<QuarterWidgetP *>(userdata);
   SoEventManager * evman = thisp->soeventmanager;
   assert(evman);
@@ -218,6 +221,7 @@ QuarterWidgetP::postrendercb(void * userdata, SoRenderManager * manager)
 void
 QuarterWidgetP::statechangecb(void * userdata, ScXMLStateMachine * statemachine, const char * stateid, SbBool enter, SbBool)
 {
+  Q_UNUSED(statemachine); 
   static const SbName contextmenurequest("contextmenurequest");
   QuarterWidgetP * thisp = static_cast<QuarterWidgetP *>(userdata);
   assert(thisp && thisp->master);
@@ -325,6 +329,9 @@ QuarterWidgetP::nativeEventFilter(void * message, long * result)
     qApp->postEvent(QApplication::focusWidget(), ne);
     return true;
   }
+#else
+  Q_UNUSED(message); 
+  Q_UNUSED(result); 
 #endif // HAVE_SPACENAV_LIB
 
   return false;

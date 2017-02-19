@@ -38,6 +38,9 @@
     #include <QPrinter>
     #include <QPrintDialog>
     #include <QPrintPreviewDialog>
+    #include <boost/signal.hpp>
+    #include <boost/bind.hpp>
+
 #endif  // #ifndef _PreComp_
 
 #include <math.h>
@@ -75,7 +78,9 @@
 #include <Mod/TechDraw/App/DrawViewSection.h>
 #include <Mod/TechDraw/App/DrawViewSpreadsheet.h>
 #include <Mod/TechDraw/App/DrawViewSymbol.h>
+#include <Mod/TechDraw/App/DrawViewImage.h>
 
+#include "Rez.h"
 #include "QGIDrawingTemplate.h"
 #include "QGIView.h"
 #include "QGIViewPart.h"
@@ -96,7 +101,7 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
   : Gui::MDIView(doc, parent),
     m_orientation(QPrinter::Landscape),
     m_paperSize(QPrinter::A4),
-    pageGui(pageVp),
+    m_vpPage(pageVp),
     m_frameState(true)
 {
 
@@ -144,12 +149,17 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
         m_view->scene(), SIGNAL(selectionChanged()),
         this           , SLOT  (selectionChanged())
        );
+       
+    //get informed by App side about deleted DocumentObjects
+    App::Document* appDoc = m_vpPage->getDocument()->getDocument();
+    auto bnd = boost::bind(&MDIViewPage::onDeleteObject, this, _1);
+    connectDeletedObject = appDoc->signalDeletedObject.connect(bnd);
 
 
      // A fresh page is added and we iterate through its collected children and add these to Canvas View  -MLP
      // if docobj is a featureviewcollection (ex orthogroup), add its child views. if there are ever children that have children,
      // we'll have to make this recursive. -WF
-    const std::vector<App::DocumentObject*> &grp = pageGui->getPageObject()->Views.getValues();
+    const std::vector<App::DocumentObject*> &grp = m_vpPage->getDrawPage()->Views.getValues();
     std::vector<App::DocumentObject*> childViews;
     for (std::vector<App::DocumentObject*>::const_iterator it = grp.begin();it != grp.end(); ++it) {
         attachView(*it);
@@ -165,30 +175,22 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
     //therefore we need to make sure parentage of the graphics representation is set properly. bit of a kludge.
     setDimensionGroups();
 
-    App::DocumentObject *obj = pageGui->getPageObject()->Template.getValue();
-    if(obj && obj->isDerivedFrom(TechDraw::DrawTemplate::getClassTypeId())) {
-        TechDraw::DrawTemplate *pageTemplate = dynamic_cast<TechDraw::DrawTemplate *>(obj);
+    App::DocumentObject *obj = m_vpPage->getDrawPage()->Template.getValue();
+    auto pageTemplate( dynamic_cast<TechDraw::DrawTemplate *>(obj) );
+    if( pageTemplate ) {
+        //make sceneRect 1 pagesize bigger in every direction
+        double width  =  Rez::guiX(pageTemplate->Width.getValue());
+        double height =  Rez::guiX(pageTemplate->Height.getValue());
+        m_view->scene()->setSceneRect(QRectF(-width,-2.0 * height,3.0*width,3.0*height));
         attachTemplate(pageTemplate);
+        viewAll();
     }
-
 }
 
 
 MDIViewPage::~MDIViewPage()
 {
-    // Safely remove graphicview items that have built up TEMP SOLUTION
-    for(auto it : deleteItems) {
-        auto qObjPtr( dynamic_cast<QObject *>(it) );
-        if (qObjPtr) {
-            qObjPtr->deleteLater();
-        } else {
-            delete it;
-        }
-    }
-    deleteItems.clear();
-
-    //m_view will be deleted by MDIViewPage as a Qt child
-    //delete m_view;
+    connectDeletedObject.disconnect();
 }
 
 
@@ -250,11 +252,9 @@ void MDIViewPage::contextMenuEvent(QContextMenuEvent *event)
 
 void MDIViewPage::attachTemplate(TechDraw::DrawTemplate *obj)
 {
-    //why doesn't setting the template set the papersize???
     m_view->setPageTemplate(obj);
     double width  =  obj->Width.getValue();
     double height =  obj->Height.getValue();
-    m_view->scene()->setSceneRect(QRectF(-1.,-height,width+1.,height));         //the +/- 1 is because of the way the template is define???
     m_paperSize = getPaperSize(int(round(width)),int(round(height)));
     if (width > height) {
         m_orientation = QPrinter::Landscape;
@@ -263,65 +263,95 @@ void MDIViewPage::attachTemplate(TechDraw::DrawTemplate *obj)
     }
 }
 
+QPointF MDIViewPage::getTemplateCenter(TechDraw::DrawTemplate *obj)
+{
+    double cx  =  Rez::guiX(obj->Width.getValue())/2.0;
+    double cy =  -Rez::guiX(obj->Height.getValue())/2.0;
+    QPointF result(cx,cy);
+    return result;
+}
 
-int MDIViewPage::attachView(App::DocumentObject *obj)
+void MDIViewPage::centerOnPage(void)
+{
+    App::DocumentObject *obj = m_vpPage->getDrawPage()->Template.getValue();
+    auto pageTemplate( dynamic_cast<TechDraw::DrawTemplate *>(obj) );
+    if( pageTemplate ) {
+        QPointF viewCenter = getTemplateCenter(pageTemplate);
+        m_view->centerOn(viewCenter);
+    }
+}
+
+bool MDIViewPage::attachView(App::DocumentObject *obj)
 {
     auto typeId(obj->getTypeId());
 
     QGIView *qview(nullptr);
 
     if (typeId.isDerivedFrom(TechDraw::DrawViewSection::getClassTypeId()) ) {
-        qview = m_view->addViewSection( dynamic_cast<TechDraw::DrawViewSection *>(obj) );
+        qview = m_view->addViewSection( static_cast<TechDraw::DrawViewSection *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewPart::getClassTypeId()) ) {
-        qview = m_view->addViewPart( dynamic_cast<TechDraw::DrawViewPart *>(obj) );
+        qview = m_view->addViewPart( static_cast<TechDraw::DrawViewPart *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawProjGroup::getClassTypeId()) ) {
-        qview = m_view->addProjectionGroup( dynamic_cast<TechDraw::DrawProjGroup *>(obj) );
+        qview = m_view->addProjectionGroup( static_cast<TechDraw::DrawProjGroup *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewCollection::getClassTypeId()) ) {
-        qview =  m_view->addDrawView( dynamic_cast<TechDraw::DrawViewCollection *>(obj) );
+        qview = m_view->addDrawView( static_cast<TechDraw::DrawViewCollection *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewDimension::getClassTypeId()) ) {
-        qview = m_view->addViewDimension( dynamic_cast<TechDraw::DrawViewDimension *>(obj) );
+        qview = m_view->addViewDimension( static_cast<TechDraw::DrawViewDimension *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewAnnotation::getClassTypeId()) ) {
-        qview = m_view->addDrawViewAnnotation( dynamic_cast<TechDraw::DrawViewAnnotation *>(obj) );
+        qview = m_view->addDrawViewAnnotation( static_cast<TechDraw::DrawViewAnnotation *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewSymbol::getClassTypeId()) ) {
-        qview = m_view->addDrawViewSymbol( dynamic_cast<TechDraw::DrawViewSymbol *>(obj) );
+        qview = m_view->addDrawViewSymbol( static_cast<TechDraw::DrawViewSymbol *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewClip::getClassTypeId()) ) {
-        qview = m_view->addDrawViewClip( dynamic_cast<TechDraw::DrawViewClip *>(obj) );
+        qview = m_view->addDrawViewClip( static_cast<TechDraw::DrawViewClip *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawViewSpreadsheet::getClassTypeId()) ) {
-        qview = m_view->addDrawViewSpreadsheet( dynamic_cast<TechDraw::DrawViewSpreadsheet *>(obj) );
+        qview = m_view->addDrawViewSpreadsheet( static_cast<TechDraw::DrawViewSpreadsheet *>(obj) );
+
+    } else if (typeId.isDerivedFrom(TechDraw::DrawViewImage::getClassTypeId()) ) {
+        qview = m_view->addDrawViewImage( static_cast<TechDraw::DrawViewImage *>(obj) );
 
     } else if (typeId.isDerivedFrom(TechDraw::DrawHatch::getClassTypeId()) ) {
         //Hatch is not attached like other Views (since it isn't really a View)
+        return true;
+    //DrawGeomHatch??
 
     } else {
         Base::Console().Log("Logic Error - Unknown view type in MDIViewPage::attachView\n");
     }
 
-    if(!qview)
-        return -1;
-    else
-        return m_view->getViews().size();
+    return (qview != nullptr);
 }
 
-
+void MDIViewPage::onDeleteObject(const App::DocumentObject& obj)
+{
+    if (obj.isDerivedFrom(TechDraw::DrawView::getClassTypeId())) {
+        const App::DocumentObject* objPtr = &obj;
+        const TechDraw::DrawView* dv = static_cast<const TechDraw::DrawView*>(objPtr);
+        TechDraw::DrawPage* dvPg = dv->findParentPage();
+        if (dvPg == m_vpPage->getDrawPage()) {
+            //this is a DV that is on our page
+            (void) m_view->removeQViewByDrawView(dv);
+        }
+    }
+}
 
 void MDIViewPage::updateTemplate(bool forceUpdate)
 {
-    App::DocumentObject *templObj = pageGui->getPageObject()->Template.getValue();
+    App::DocumentObject *templObj = m_vpPage->getDrawPage()->Template.getValue();
     // TODO: what if template has been deleted? templObj will be NULL. segfault?
     if (!templObj) {
-        Base::Console().Log("INFO - MDIViewPage::updateTemplate - Page: %s has NO template!!\n",pageGui->getPageObject()->getNameInDocument());
+        Base::Console().Log("INFO - MDIViewPage::updateTemplate - Page: %s has NO template!!\n",m_vpPage->getDrawPage()->getNameInDocument());
         return;
     }
 
-    if(pageGui->getPageObject()->Template.isTouched() || templObj->isTouched()) {
+    if(m_vpPage->getDrawPage()->Template.isTouched() || templObj->isTouched()) {
         // Template is touched so update
 
         if(forceUpdate ||
@@ -340,59 +370,37 @@ void MDIViewPage::updateTemplate(bool forceUpdate)
 
 void MDIViewPage::updateDrawing(bool forceUpdate)
 {
-    // We cannot guarantee if the number of graphical representations (QGIVxxxx) have changed so check the number
-    // Why?
-    const std::vector<QGIView *> &graphicsList = m_view->getViews();
-    const std::vector<App::DocumentObject*> &pageChildren  = pageGui->getPageObject()->Views.getValues();
-
-    // Count total # DocumentObjects in Page
-    unsigned int docObjCount = 0;
-    for(std::vector<App::DocumentObject*>::const_iterator it = pageChildren.begin(); it != pageChildren.end(); ++it) {
-        App::DocumentObject *docObj = *it;
-        if(docObj->getTypeId().isDerivedFrom(TechDraw::DrawViewCollection::getClassTypeId())) {
-            TechDraw::DrawViewCollection *collection = dynamic_cast<TechDraw::DrawViewCollection *>(docObj);
-            docObjCount += collection->countChildren(); // Include self
+    // get all the DrawViews for this page, including the second level ones
+    // if we ever have collections of collections, we'll need to revisit this
+    std::vector<App::DocumentObject*> pChildren  = m_vpPage->getDrawPage()->Views.getValues();
+    std::vector<App::DocumentObject*> appendChildren;
+    for (auto& pc: pChildren) {
+        if(pc->getTypeId().isDerivedFrom(TechDraw::DrawViewCollection::getClassTypeId())) {
+            TechDraw::DrawViewCollection *collect = dynamic_cast<TechDraw::DrawViewCollection *>(pc);
+            std::vector<App::DocumentObject*> cChildren = collect->Views.getValues();
+            appendChildren.insert(std::end(appendChildren), std::begin(cChildren), std::end(cChildren));
         }
-        docObjCount += 1;
     }
+    pChildren.insert(std::end(pChildren),std::begin(appendChildren),std::end(appendChildren));
 
-    if(graphicsList.size() < docObjCount) {
-        // there are more DocumentObjects than graphical representations (QGIVxxxx's)
-        // Find which DocumentObjects have no graphical representation (QGIVxxxx)
-        // Iterate over DocumentObjects without graphical representations and create the QGIVxxxx
-        // TODO think of a better algorithm to deal with any changes to views list
-        std::vector<App::DocumentObject*> notFnd;
-        findMissingViews(pageChildren, notFnd);
-        for(std::vector<App::DocumentObject*>::const_iterator it = notFnd.begin(); it != notFnd.end(); ++it) {
-            attachView(*it);
+    // if dv doesn't have a graphic, make one
+    for (auto& dv: pChildren) {
+        QGIView* qv = m_view->findQViewForDocObj(dv);
+        if (qv == nullptr) {
+            attachView(dv);
         }
-    } else if(graphicsList.size() > docObjCount) {
-        // There are more graphical representations (QGIVxxxx) than DocumentObjects
-        // Remove the orphans
-        std::vector<QGIView *>::const_iterator itGraphics = graphicsList.begin();
-        std::vector<QGIView *> newGraphicsList;
-        bool fnd = false;
-        while(itGraphics != graphicsList.end()) {
-            fnd = orphanExists((*itGraphics)->getViewName(), pageChildren);
-            if(fnd) {
-                newGraphicsList.push_back(*itGraphics);
-            } else {
-                if (m_view->scene() == (*itGraphics)->scene()) {
-                    (*itGraphics)->hide();
-                    m_view->scene()->removeItem(*itGraphics);
-                } else {   // this "shouldn't" happen, but it does
-                    Base::Console().Log("ERROR - MDIViewPage::updateDrawing - %s already removed from QGraphicsScene\n",
-                                        (*itGraphics)->getViewName());
-                }
-                deleteItems.append(*itGraphics); // delete in the destructor when completly safe. TEMP SOLUTION
-            }
-            itGraphics++;
-        }
-
-        // Update the QGVPage (QGraphicsView) list of QGIVxxxx
-        m_view->setViews(newGraphicsList);
     }
-
+    
+    // if qView doesn't have a Feature, delete it
+    std::vector<QGIView*> qvs = m_view->getViews();
+    App::Document* doc = getAppDocument();
+    for (auto& qv: qvs) {
+        App::DocumentObject* obj = doc->getObject(qv->getViewName());
+        if (obj == nullptr) {
+            m_view->removeQView(qv);
+        }
+    }
+    
     // Update all the QGIVxxxx
     const std::vector<QGIView *> &upviews = m_view->getViews();
     for(std::vector<QGIView *>::const_iterator it = upviews.begin(); it != upviews.end(); ++it) {
@@ -403,7 +411,25 @@ void MDIViewPage::updateDrawing(bool forceUpdate)
     }
 }
 
+void MDIViewPage::redrawAllViews()
+{
+    const std::vector<QGIView *> &upviews = m_view->getViews();
+    for(std::vector<QGIView *>::const_iterator it = upviews.begin(); it != upviews.end(); ++it) {
+            (*it)->updateView(true);
+    }
+}
 
+void MDIViewPage::redraw1View(TechDraw::DrawView* dv)
+{
+    std::string dvName = dv->getNameInDocument();
+    const std::vector<QGIView *> &upviews = m_view->getViews();
+    for(std::vector<QGIView *>::const_iterator it = upviews.begin(); it != upviews.end(); ++it) {
+        std::string qgivName = (*it)->getViewName();
+        if(dvName == qgivName) {
+            (*it)->updateView(true);
+        }
+    }
+}
 void MDIViewPage::findMissingViews(const std::vector<App::DocumentObject*> &list, std::vector<App::DocumentObject*> &missing)
 {
     for(std::vector<App::DocumentObject*>::const_iterator it = list.begin(); it != list.end(); ++it) {
@@ -434,7 +460,7 @@ bool MDIViewPage::hasQView(App::DocumentObject *obj)
 
     while(qview != views.end()) {
         // Unsure if we can compare pointers so rely on name
-        if(strcmp((*qview)->getViewObject()->getNameInDocument(), obj->getNameInDocument()) == 0) {
+        if(strcmp((*qview)->getViewName(), obj->getNameInDocument()) == 0) {
             return true;
         }
         qview++;
@@ -465,7 +491,7 @@ bool MDIViewPage::orphanExists(const char *viewName, const std::vector<App::Docu
 }
 
 
-bool MDIViewPage::onMsg(const char *pMsg, const char **ppReturn)
+bool MDIViewPage::onMsg(const char *pMsg, const char **)
 {
     Gui::Document *doc(getGuiDocument());
 
@@ -534,7 +560,7 @@ void MDIViewPage::printPdf()
     dlg.setFileMode(QFileDialog::AnyFile);
     dlg.setAcceptMode(QFileDialog::AcceptSave);
     dlg.setWindowTitle(tr("Export PDF"));
-    dlg.setFilters(QStringList() << QString::fromLatin1("%1 (*.pdf)").arg(tr("PDF file")));
+    dlg.setNameFilters(QStringList() << QString::fromLatin1("%1 (*.pdf)").arg(tr("PDF file")));
 
     QGridLayout *gridLayout;
     QGridLayout *formLayout;
@@ -686,12 +712,12 @@ void MDIViewPage::print(QPrinter* printer)
         return;
     }
 
-    QRect rect = printer->paperRect();
+    QRect targetRect = printer->paperRect();
 #ifdef Q_OS_WIN32
     // On Windows the preview looks broken when using paperRect as render area.
     // Although the picture is scaled when using pageRect, it looks just fine.
     if (paintType == QPaintEngine::Picture)
-        rect = printer->pageRect();
+        targetRect = printer->pageRect();
 #endif
 
     //bool block =
@@ -703,7 +729,17 @@ void MDIViewPage::print(QPrinter* printer)
 
     Gui::Selection().clearSelection();
 
-    m_view->scene()->render(&p, rect);
+    App::DocumentObject *obj = m_vpPage->getDrawPage()->Template.getValue();
+    auto pageTemplate( dynamic_cast<TechDraw::DrawTemplate *>(obj) );
+    double width  =  0.0;
+    double height =  0.0;
+    if( pageTemplate ) {
+      width  =  Rez::guiX(pageTemplate->Width.getValue());
+      height =  Rez::guiX(pageTemplate->Height.getValue());
+    }
+    QRectF sourceRect(0.0,-height,width,height);
+
+    m_view->scene()->render(&p, targetRect,sourceRect);
 
     // Reset
     m_view->toggleMarkers(true);
@@ -798,7 +834,8 @@ void MDIViewPage::setRenderer(QAction *action)
 
 void MDIViewPage::viewAll()
 {
-    m_view->fitInView(m_view->scene()->sceneRect(), Qt::KeepAspectRatio);
+    //m_view->fitInView(m_view->scene()->sceneRect(), Qt::KeepAspectRatio);
+    m_view->fitInView(m_view->scene()->itemsBoundingRect(), Qt::KeepAspectRatio);
 }
 
 
@@ -910,7 +947,7 @@ void MDIViewPage::selectFeature(App::DocumentObject *obj, const bool isSelected)
     if (hatchObj) {                                                    //Hatch does not have a QGIV of it's own. mark parent as selected.
         objCopy = hatchObj->getSourceView();                           //possible to highlight subObject?
     }
-    QGIView *view = m_view->findView(objCopy);
+    QGIView *view = m_view->findQViewForDocObj(objCopy);
 
     blockSelection(true);
     if(view) {

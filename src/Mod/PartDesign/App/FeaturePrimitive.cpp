@@ -30,10 +30,13 @@
 #include "DatumPoint.h"
 #include "DatumCS.h"
 #include <Mod/Part/App/modelRefine.h>
+#include <Mod/Part/App/PartFeaturePy.h>
 #include <Base/Exception.h>
 #include <Base/Tools.h>
 #include <App/Document.h>
 #include <App/Application.h>
+#include <App/FeaturePythonPyImp.h>
+
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -59,12 +62,12 @@ const App::PropertyQuantityConstraint::Constraints angleRangeU = {0.0,360.0,1.0}
 const App::PropertyQuantityConstraint::Constraints angleRangeV = {-90.0,90.0,1.0};
 const App::PropertyQuantityConstraint::Constraints quantityRange  = {0.0,FLT_MAX,0.1};
 
-PROPERTY_SOURCE(PartDesign::FeaturePrimitive, PartDesign::FeatureAddSub)
+PROPERTY_SOURCE_WITH_EXTENSIONS(PartDesign::FeaturePrimitive, PartDesign::FeatureAddSub)
 
 FeaturePrimitive::FeaturePrimitive()
   :  primitiveType(Box)
 {
-    ADD_PROPERTY_TYPE(CoordinateSystem, (0), "Primitive", App::Prop_None, "References to build the location of the primitive");
+    Part::AttachExtension::initExtension(this);
 }
 
 TopoDS_Shape FeaturePrimitive::refineShapeIfActive(const TopoDS_Shape& oldShape) const
@@ -84,13 +87,9 @@ App::DocumentObjectExecReturn* FeaturePrimitive::execute(const TopoDS_Shape& pri
 {
     try {
         //transform the primitive in the correct coordinance
-        App::DocumentObject* cs =  CoordinateSystem.getValue();
-        if(cs && cs->getTypeId() == PartDesign::CoordinateSystem::getClassTypeId())
-            Placement.setValue(static_cast<PartDesign::CoordinateSystem*>(cs)->Placement.getValue());
-        else 
-            Placement.setValue(Base::Placement());
+        FeatureAddSub::execute();
         
-        //if we have no base we just add the standart primitive shape
+        //if we have no base we just add the standard primitive shape
         TopoDS_Shape base;
         try{
              //if we have a base shape we need to make sure that it does not get our transformation to
@@ -156,6 +155,18 @@ void FeaturePrimitive::onChanged(const App::Property* prop)
     FeatureAddSub::onChanged(prop);
 }
 
+PYTHON_TYPE_DEF(PrimitivePy, Part::PartFeaturePy)
+PYTHON_TYPE_IMP(PrimitivePy, Part::PartFeaturePy)
+
+PyObject* FeaturePrimitive::getPyObject()
+{
+    if (PythonObject.is(Py::_None())){
+        // ref counter is set to 1
+        PythonObject = Py::Object(new PrimitivePy(this),true);
+    }
+    return Py::new_reference_to(PythonObject);
+}
+
 PROPERTY_SOURCE(PartDesign::Box, PartDesign::FeaturePrimitive)
 
 Box::Box()
@@ -215,7 +226,7 @@ PROPERTY_SOURCE(PartDesign::Cylinder, PartDesign::FeaturePrimitive)
 Cylinder::Cylinder()
 {
     ADD_PROPERTY_TYPE(Radius,(10.0f),"Cylinder",App::Prop_None,"The radius of the cylinder");
-    ADD_PROPERTY_TYPE(Angle,(10.0f),"Cylinder",App::Prop_None,"The closing angel of the cylinder ");
+    ADD_PROPERTY_TYPE(Angle,(360.0f),"Cylinder",App::Prop_None,"The closing angle of the cylinder ");
     ADD_PROPERTY_TYPE(Height,(10.0f),"Cylinder",App::Prop_None,"The height of the cylinder");
     Angle.setConstraints(&angleRangeU);
     Radius.setConstraints(&quantityRange);

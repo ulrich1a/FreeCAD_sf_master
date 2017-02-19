@@ -23,18 +23,23 @@
 #ifndef _TECHDRAW_FEATUREVIEWGROUP_H_
 #define _TECHDRAW_FEATUREVIEWGROUP_H_
 
+#include <string>
+# include <QRectF>
 #include <App/DocumentObject.h>
 #include <App/PropertyStandard.h>
 
 #include <Base/BoundBox.h>
 #include <Base/Matrix.h>
+#include <Base/Vector3D.h>
 
+//#include "Cube.h"
 #include "DrawViewCollection.h"
 
 namespace TechDraw
 {
 
 class DrawProjGroupItem;
+class Cube;
 
 /**
  * Class super-container for managing a collection of DrawProjGroupItem
@@ -51,23 +56,23 @@ public:
 
     App::PropertyEnumeration ProjectionType;
 
+    App::PropertyBool AutoDistribute;
     /// Default horizontal spacing between adjacent views on Drawing, in mm
     App::PropertyFloat spacingX;
     /// Default vertical spacing between adjacent views on Drawing, in mm
     App::PropertyFloat spacingY;
 
-    /// Transforms Direction and XAxisDirection vectors in child views
-    App::PropertyMatrix viewOrientationMatrix;
-
     App::PropertyLink Anchor; /// Anchor Element to align views to
 
     Base::BoundBox3d getBoundingBox() const;
     double calculateAutomaticScale() const;
-
+    virtual QRectF getRect(void) const;
+    virtual bool checkFit(TechDraw::DrawPage* p) const override;
     /// Check if container has a view of a specific type
     bool hasProjection(const char *viewProjType) const;
 
     App::DocumentObject * getProjObj(const char *viewProjType) const;
+    DrawProjGroupItem* getProjItem(const char *viewProjType) const;
 
     //! Adds a projection to the group
     /*!
@@ -81,14 +86,10 @@ public:
      */
     int removeProjection(const char *viewProjType);
 
+    int purgeProjections();
     /// Automatically position child views
     bool distributeProjections(void);
     void resetPositions(void);
-    /// Changes child views' coordinate space
-    /*!
-     * Used to set the Direction and XAxisDirection in child views
-     */
-    void setFrontViewOrientation(const Base::Matrix4D &newMat);
 
     short mustExecute() const;
     /** @name methods overide Feature */
@@ -111,6 +112,25 @@ public:
     /// Allowed projection types - either Document, First Angle or Third Angle
     static const char* ProjectionTypeEnums[];
 
+    bool hasAnchor(void);
+    void setAnchorDirection(Base::Vector3d dir);
+    Base::Vector3d getAnchorDirection(void);
+    TechDraw::DrawProjGroupItem* getAnchor(void);
+
+    void updateSecondaryDirs();
+
+    void rotateRight(void);
+    void rotateLeft(void);
+    void rotateUp(void);
+    void rotateDown(void);
+    void spinCW(void);
+    void spinCCW(void);
+    
+    void setTable(Base::Vector3d dir, Base::Vector3d rot);
+    void setConfig(std::string cfg);
+    void resetTable(void);
+    void dumpISO(char * title);
+
 protected:
     void onChanged(const App::Property* prop);
 
@@ -124,30 +144,6 @@ protected:
      */
     bool checkViewProjType(const char *in);
 
-    /// Sets Direction and XAxisDirection in v
-    /*!
-     * Applies viewOrientationMatrix to appropriate unit vectors depending on projType
-     */
-    void setViewOrientation(DrawProjGroupItem *v, const char *projType) const;
-
-    /// Populates an array of DrawProjGroupItem*s arranged for drawing
-    /*!
-     * Setup array of pointers to the views that we're displaying,
-     * assuming front is in centre (index 4):
-     * <pre>
-     * [0]  [1]  [2]
-     * [3]  [4]  [5]  [6]
-     * [7]  [8]  [9]
-     *
-     * Third Angle:  FTL  T  FTRight
-     *                L   F   Right   Rear
-     *               FBL  B  FBRight
-     *
-     * First Angle:  FBRight  B  FBL
-     *                Right   F   L  Rear
-     *               FTRight  T  FTL
-     * </pre>
-     */
     void arrangeViewPointers(DrawProjGroupItem *viewPtrs[10]) const;
 
     /// Populates array of 10 BoundBox3d's given DrawProjGroupItem *s
@@ -169,6 +165,14 @@ protected:
 
     /// Returns pointer to our page, or NULL if it couldn't be located
     TechDraw::DrawPage * getPage(void) const;
+    void updateChildren(double scale);
+    
+    //TechDraw::Cube m_cube;
+    TechDraw::Cube* m_cube;
+    static const std::map<std::string,Base::Vector3d> m_frameToStdDir;    //for initializing cube and
+    static const std::map<std::string,Base::Vector3d> m_frameToStdRot;    //creating DPGI's
+    static const std::map<std::string,std::string> m_dirRotToConfig;
+    static const std::map<std::string,std::string> m_frontTopToConfig;
 };
 
 } //namespace TechDraw

@@ -25,6 +25,7 @@
 import FreeCAD
 import Path
 import numpy
+import TechDraw
 from FreeCAD import Vector
 from PathScripts import PathUtils
 from PathScripts.PathUtils import depth_params
@@ -32,10 +33,10 @@ from PathScripts.PathUtils import depth_params
 if FreeCAD.GuiUp:
     import FreeCADGui
     from PySide import QtCore, QtGui
-    from DraftTools import translate
     # Qt tanslation handling
     try:
         _encoding = QtGui.QApplication.UnicodeUTF8
+
         def translate(context, text, disambig=None):
             return QtGui.QApplication.translate(context, text, disambig, _encoding)
     except AttributeError:
@@ -51,70 +52,51 @@ __url__ = "http://www.freecadweb.org"
 
 """Path Profile object and FreeCAD command"""
 
+
 class ObjectProfile:
 
     def __init__(self, obj):
-        obj.addProperty("App::PropertyLinkSubList", "Base", "Path", "The base geometry of this toolpath")
-        obj.addProperty("App::PropertyBool", "Active", "Path", "Make False, to prevent operation from generating code")
-        obj.addProperty("App::PropertyString", "Comment", "Path", "An optional comment for this profile")
-        obj.addProperty("App::PropertyString", "UserLabel", "Path", "User Assigned Label")
-
-        obj.addProperty("App::PropertyEnumeration", "Algorithm", "Algorithm", "The library or algorithm used to generate the path")
-        obj.Algorithm = ['OCC Native', 'libarea']
+        obj.addProperty("App::PropertyLinkSubList", "Base", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property", "The base geometry of this toolpath"))
+        obj.addProperty("App::PropertyBool", "Active", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property", "Make False, to prevent operation from generating code"))
+        obj.addProperty("App::PropertyString", "Comment", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property", "An optional comment for this profile"))
+        obj.addProperty("App::PropertyString", "UserLabel", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property", "User Assigned Label"))
 
         obj.addProperty("App::PropertyIntegerConstraint", "ToolNumber", "Tool", "The tool number in use")
         obj.ToolNumber = (0, 0, 1000, 1)
         obj.setEditorMode('ToolNumber', 1)  # make this read only
         obj.addProperty("App::PropertyString", "ToolDescription", "Tool", "The description of the tool ")
-        obj.setEditorMode('ToolDescription', 1) # make this read onlyt
+        obj.setEditorMode('ToolDescription', 1)  # make this read only
 
         # Depth Properties
-        obj.addProperty("App::PropertyDistance", "ClearanceHeight", "Depth", "The height needed to clear clamps and obstructions")
-        obj.addProperty("App::PropertyDistance", "SafeHeight", "Depth", "Rapid Safety Height between locations.")
-        obj.addProperty("App::PropertyFloatConstraint", "StepDown", "Depth", "Incremental Step Down of Tool")
-        obj.StepDown = (1, 0.01, 1000, 0.5)
-        obj.addProperty("App::PropertyDistance", "StartDepth", "Depth", "Starting Depth of Tool- first cut depth in Z")
-        obj.addProperty("App::PropertyDistance", "FinalDepth", "Depth", "Final Depth of Tool- lowest value in Z")
+        obj.addProperty("App::PropertyDistance", "ClearanceHeight", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property", "The height needed to clear clamps and obstructions"))
+        obj.addProperty("App::PropertyDistance", "SafeHeight", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property", "Rapid Safety Height between locations."))
+        obj.addProperty("App::PropertyDistance", "StepDown", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property", "Incremental Step Down of Tool"))
+        obj.addProperty("App::PropertyDistance", "StartDepth", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property", "Starting Depth of Tool- first cut depth in Z"))
+        obj.addProperty("App::PropertyDistance", "FinalDepth", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property", "Final Depth of Tool- lowest value in Z"))
 
         # Start Point Properties
-        obj.addProperty("App::PropertyVector", "StartPoint", "Start Point", "The start point of this path")
-        obj.addProperty("App::PropertyBool", "UseStartPoint", "Start Point", "make True, if specifying a Start Point")
-        obj.addProperty("App::PropertyLength", "ExtendAtStart", "Start Point", "extra length of tool path before start of part edge")
-        obj.addProperty("App::PropertyLength", "LeadInLineLen", "Start Point", "length of straight segment of toolpath that comes in at angle to first part edge")
+        obj.addProperty("App::PropertyVector", "StartPoint", "Start Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "The start point of this path"))
+        obj.addProperty("App::PropertyBool", "UseStartPoint", "Start Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "make True, if specifying a Start Point"))
+        obj.addProperty("App::PropertyLength", "ExtendAtStart", "Start Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "extra length of tool path before start of part edge"))
+        obj.addProperty("App::PropertyLength", "LeadInLineLen", "Start Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "length of straight segment of toolpath that comes in at angle to first part edge"))
 
         # End Point Properties
-        obj.addProperty("App::PropertyBool", "UseEndPoint", "End Point", "make True, if specifying an End Point")
-        obj.addProperty("App::PropertyLength", "ExtendAtEnd", "End Point", "extra length of tool path after end of part edge")
-        obj.addProperty("App::PropertyLength", "LeadOutLineLen", "End Point", "length of straight segment of toolpath that comes in at angle to last part edge")
-        obj.addProperty("App::PropertyVector", "EndPoint", "End Point", "The end point of this path")
+        obj.addProperty("App::PropertyBool", "UseEndPoint", "End Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "make True, if specifying an End Point"))
+        obj.addProperty("App::PropertyLength", "ExtendAtEnd", "End Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "extra length of tool path after end of part edge"))
+        obj.addProperty("App::PropertyLength", "LeadOutLineLen", "End Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "length of straight segment of toolpath that comes in at angle to last part edge"))
+        obj.addProperty("App::PropertyVector", "EndPoint", "End Point", QtCore.QT_TRANSLATE_NOOP("App::Property", "The end point of this path"))
 
         # Profile Properties
-        obj.addProperty("App::PropertyEnumeration", "Side", "Profile", "Side of edge that tool should cut")
+        obj.addProperty("App::PropertyEnumeration", "Side", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "Side of edge that tool should cut"))
         obj.Side = ['Left', 'Right', 'On']  # side of profile that cutter is on in relation to direction of profile
-        obj.addProperty("App::PropertyEnumeration", "Direction", "Profile", "The direction that the toolpath should go around the part ClockWise CW or CounterClockWise CCW")
+        obj.addProperty("App::PropertyEnumeration", "Direction", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "The direction that the toolpath should go around the part ClockWise CW or CounterClockWise CCW"))
         obj.Direction = ['CW', 'CCW']  # this is the direction that the profile runs
-        obj.addProperty("App::PropertyBool", "UseComp", "Profile", "make True, if using Cutter Radius Compensation")
+        obj.addProperty("App::PropertyBool", "UseComp", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "make True, if using Cutter Radius Compensation"))
 
-        obj.addProperty("App::PropertyDistance", "RollRadius", "Profile", "Radius at start and end")
-        obj.addProperty("App::PropertyDistance", "OffsetExtra", "Profile", "Extra value to stay away from final profile- good for roughing toolpath")
-        obj.addProperty("App::PropertyLength", "SegLen", "Profile", "Tesselation  value for tool paths made from beziers, bsplines, and ellipses")
-        obj.addProperty("App::PropertyAngle", "PlungeAngle", "Profile", "Plunge angle with which the tool enters the work piece. Straight down is 90 degrees, if set small enough or zero the tool will descent exactly one layer depth down per turn")
-
-        obj.addProperty("App::PropertyVectorList", "locs", "Tags", "List of holding tag locations")
-
-        obj.addProperty("App::PropertyFloatList", "angles", "Tags", "List of angles for the holding tags")
-        obj.addProperty("App::PropertyFloatList", "heights", "Tags", "List of angles for the holding tags")
-        obj.addProperty("App::PropertyFloatList", "lengths", "Tags", "List of angles for the holding tags")
-        locations = []
-        angles = []
-        lengths = []
-        heights = []
-
-        obj.locs = locations
-        obj.angles = angles
-        obj.lengths = lengths
-        obj.heights = heights
-        obj.ToolDescription = "UNDEFINED"
+        obj.addProperty("App::PropertyDistance", "RollRadius", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "Radius at start and end"))
+        obj.addProperty("App::PropertyDistance", "OffsetExtra", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "Extra value to stay away from final profile- good for roughing toolpath"))
+        obj.addProperty("App::PropertyBool", "processHoles", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "Profile holes as well as the outline"))
+        obj.addProperty("App::PropertyBool", "processPerimeter", "Profile", QtCore.QT_TRANSLATE_NOOP("App::Property", "Profile the outline"))
 
         obj.Proxy = self
 
@@ -147,7 +129,7 @@ class ObjectProfile:
                     obj.FinalDepth = fbb.ZMin
                 elif fbb.ZMax == fbb.ZMin and fbb.ZMax > bb.ZMin:  # face/shelf
                     obj.FinalDepth = fbb.ZMin
-                else: #catch all
+                else:  # catch all
                     obj.FinalDepth = bb.ZMin
             except:
                 obj.StartDepth = 5.0
@@ -167,32 +149,10 @@ class ObjectProfile:
         obj.Base = baselist
         self.execute(obj)
 
-    def _buildPathOCC(self, obj, wire):
-        import DraftGeomUtils
-        output = ""
-        if obj.Comment != "":
-            output += '(' + str(obj.Comment)+')\n'
-
-        if obj.Direction == 'CCW':
-            clockwise = False
-        else:
-            clockwise = True
-
-        FirstEdge = None
-        PathClosed = DraftGeomUtils.isReallyClosed(wire)
-
-        output += PathUtils.MakePath(
-                wire, obj.Side, self.radius, clockwise,
-                obj.ClearanceHeight.Value, obj.StepDown, obj.StartDepth.Value,
-                obj.FinalDepth.Value, FirstEdge, PathClosed, obj.SegLen.Value,
-                self.vertFeed, self.horizFeed, PlungeAngle=obj.PlungeAngle.Value)
-
-        return output
-
-    def _buildPathLibarea(self, obj, edgelist):
+    def _buildPathLibarea(self, obj, edgelist, isHole):
         import PathScripts.PathKurveUtils as PathKurveUtils
-        import math
-        import area
+        # import math
+        # import area
         output = ""
         if obj.Comment != "":
             output += '(' + str(obj.Comment)+')\n'
@@ -210,9 +170,15 @@ class ObjectProfile:
         PathKurveUtils.output('mem')
         PathKurveUtils.feedrate_hv(self.horizFeed, self.vertFeed)
 
+        # Reverse the direction for holes
+        if isHole:
+            direction = "CW" if obj.Direction == "CCW" else "CCW"
+        else:
+            direction = obj.Direction
+
         output = ""
-        output += "G0 Z" + str(obj.ClearanceHeight.Value)
-        curve = PathKurveUtils.makeAreaCurve(edgelist, obj.Direction, startpoint, endpoint)
+        output += "G0 Z" + str(obj.ClearanceHeight.Value) + "F " + PathUtils.fmt(self.vertRapid) + "\n"
+        curve = PathKurveUtils.makeAreaCurve(edgelist, direction, startpoint, endpoint)
 
         '''The following line uses a profile function written for use with FreeCAD.  It's clean but incomplete.  It doesn't handle
 print "x = " + str(point.x)
@@ -221,9 +187,9 @@ print "y - " + str(point.y)
             start location
             CRC
             or probably other features in heekscnc'''
-        # output += PathKurveUtils.profile(curve, side, radius, vf, hf, offset_extra, rapid_safety_space, clearance, start_depth, step_down, final_depth, use_CRC)
 
-        '''The following calls the original procedure from heekscnc profile function.  This, in turn, calls many other procedures to modify the profile.
+        '''The following calls the original procedure from h
+        toolLoad = obj.activeTCeekscnc profile function.  This, in turn, calls many other procedures to modify the profile.
             This procedure is hacked together from heekscnc and has not been thoroughly reviewed or understood for FreeCAD.  It can probably be
             thoroughly optimized and improved but it'll take a smarter mind than mine to do it.  -sliptonic Feb16'''
         roll_radius = 2.0
@@ -238,24 +204,16 @@ print "y - " + str(point.y)
         I need to access the location vector, length, angle in radians and height.
 
         '''
-        PathKurveUtils.clear_tags()
-        for i in range(len(obj.locs)):
-            tag = obj.locs[i]
-            h = obj.heights[i]
-            l = obj.lengths[i]
-            a = math.radians(obj.angles[i])
-            PathKurveUtils.add_tag(area.Point(tag.x, tag.y), l, a, h)
-
         depthparams = depth_params(
             obj.ClearanceHeight.Value,
-            obj.SafeHeight.Value, obj.StartDepth.Value, obj.StepDown, 0.0,
+            obj.SafeHeight.Value, obj.StartDepth.Value, obj.StepDown.Value, 0.0,
             obj.FinalDepth.Value, None)
 
         PathKurveUtils.profile2(
-            curve, obj.Side, self.radius, self.vertFeed,
-            self.horizFeed, obj.OffsetExtra.Value, roll_radius, None, None,
-            depthparams, extend_at_start, extend_at_end, lead_in_line_len,
-            lead_out_line_len)
+            curve, obj.Side, self.radius, self.vertFeed, self.horizFeed,
+            self.vertRapid, self.horizRapid, obj.OffsetExtra.Value, roll_radius,
+            None, None, depthparams, extend_at_start, extend_at_end,
+            lead_in_line_len, lead_out_line_len)
 
         output += PathKurveUtils.retrieve_gcode()
         return output
@@ -265,15 +223,20 @@ print "y - " + str(point.y)
         output = ""
 
         toolLoad = PathUtils.getLastToolLoad(obj)
+
         if toolLoad is None or toolLoad.ToolNumber == 0:
             self.vertFeed = 100
             self.horizFeed = 100
+            self.vertRapid = 100
+            self.horizRapid = 100
             self.radius = 0.25
             obj.ToolNumber = 0
             obj.ToolDescription = "UNDEFINED"
         else:
             self.vertFeed = toolLoad.VertFeed.Value
             self.horizFeed = toolLoad.HorizFeed.Value
+            self.vertRapid = toolLoad.VertRapid.Value
+            self.horizRapid = toolLoad.HorizRapid.Value
             tool = PathUtils.getTool(obj, toolLoad.ToolNumber)
             if tool.Diameter == 0:
                 self.radius = 0.25
@@ -294,43 +257,32 @@ print "y - " + str(point.y)
             output += "(Uncompensated Tool Path)"
 
         if obj.Base:
-            hfaces = []
-            vfaces = []
-            wires = []
-
+            holes = []
+            faces = []
             for b in obj.Base:
                 for sub in b[1]:
-                    # we only consider the outer wire if this is a Face
-                    # Horizontal and vertical faces are handled differently
                     shape = getattr(b[0].Shape, sub)
-                    if numpy.isclose(abs(shape.normalAt(0, 0).z), 1):  # horizontal face
-                        hfaces.append(shape)
+                    if isinstance(shape, Part.Face):
+                        faces.append(shape)
+                        if numpy.isclose(abs(shape.normalAt(0, 0).z), 1):  # horizontal face
+                            holes += shape.Wires[1:]
 
-                    elif numpy.isclose(shape.normalAt(0, 0).z, 0):  # vertical face
-                        vfaces.append(shape)
                     else:
-                        FreeCAD.Console.PrintError(translate("Path", "Face doesn't appear to be parallel or perpendicular to the XY plane. No path will be generated for: \n"))
-                        FreeCAD.Console.PrintError(b[0].Name + "." + sub + "\n")
-            for h in hfaces:
-                wires.append(h.OuterWire)
-
-            tempshell = Part.makeShell(vfaces)
-            slices = tempshell.slice(FreeCAD.Base.Vector(0, 0, 1), tempshell.CenterOfMass.z )
-
-            wires = wires + slices
-
-            for wire in wires:
-                if obj.Algorithm == "OCC Native":
-                    output += self._buildPathOCC(obj, wire)
-                else:
-                    try:
-                        import area
-                    except:
-                        FreeCAD.Console.PrintError(translate("Path", "libarea needs to be installed for this command to work.\n"))
+                        print ("found a base object which is not a face.  Can't continue.")
                         return
+            profileshape = Part.makeCompound(faces)
+            profilewire = TechDraw.findShapeOutline(profileshape, 1, Vector(0, 0, 1))
+
+            if obj.processHoles:
+                for wire in holes:
                     edgelist = wire.Edges
                     edgelist = Part.__sortEdges__(edgelist)
-                    output += self._buildPathLibarea(obj, edgelist)
+                    output += self._buildPathLibarea(obj, edgelist, True)
+
+            if obj.processPerimeter:
+                edgelist = profilewire.Edges
+                edgelist = Part.__sortEdges__(edgelist)
+                output += self._buildPathLibarea(obj, edgelist, False)
 
         if obj.Active:
             path = Path.Path(output)
@@ -361,7 +313,7 @@ class _ViewProviderProfile:
         return True
 
     def getIcon(self):
-        return ":/icons/Path-Profile.svg"
+        return ":/icons/Path-Profile-Face.svg"
 
     def __getstate__(self):
         return None
@@ -370,45 +322,9 @@ class _ViewProviderProfile:
         return None
 
 
-class _CommandAddTag:
-    def GetResources(self):
-        return {'Pixmap': 'Path-Holding',
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("Path_Profile", "Add Holding Tag"),
-                'ToolTip': QtCore.QT_TRANSLATE_NOOP("Path_Profile", "Add Holding Tag")}
-
-    def IsActive(self):
-        return FreeCAD.ActiveDocument is not None
-
-    def setpoint(self, point, o):
-        obj = FreeCADGui.Selection.getSelection()[0]
-        obj.StartPoint.x = point.x
-        obj.StartPoint.y = point.y
-        loc = obj.locs
-        h = obj.heights
-        l = obj.lengths
-        a = obj.angles
-
-        x = point.x
-        y = point.y
-        z = float(0.0)
-        loc.append(Vector(x, y, z))
-        h.append(4.0)
-        l.append(5.0)
-        a.append(45.0)
-
-        obj.locs = loc
-        obj.heights = h
-        obj.lengths = l
-        obj.angles = a
-
-    def Activated(self):
-
-        FreeCADGui.Snapper.getPoint(callback=self.setpoint)
-
-
 class _CommandSetStartPoint:
     def GetResources(self):
-        return {'Pixmap': 'Path-Holding',
+        return {'Pixmap': 'Path-StartPoint',
                 'MenuText': QtCore.QT_TRANSLATE_NOOP("Path_Profile", "Pick Start Point"),
                 'ToolTip': QtCore.QT_TRANSLATE_NOOP("Path_Profile", "Pick Start Point")}
 
@@ -427,7 +343,7 @@ class _CommandSetStartPoint:
 
 class _CommandSetEndPoint:
     def GetResources(self):
-        return {'Pixmap': 'Path-Holding',
+        return {'Pixmap': 'Path-EndPoint',
                 'MenuText': QtCore.QT_TRANSLATE_NOOP("Path_Profile", "Pick End Point"),
                 'ToolTip': QtCore.QT_TRANSLATE_NOOP("Path_Profile", "Pick End Point")}
 
@@ -446,13 +362,17 @@ class _CommandSetEndPoint:
 
 class CommandPathProfile:
     def GetResources(self):
-        return {'Pixmap': 'Path-Profile',
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("PathProfile", "Profile"),
-                'Accel': "P, P",
-                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PathProfile", "Creates a Path Profile object from selected faces")}
+        return {'Pixmap': 'Path-Profile-Face',
+                'MenuText': QtCore.QT_TRANSLATE_NOOP("PathProfile", "Face Profile"),
+                'Accel': "P, F",
+                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PathProfile", "Profile based on face or faces")}
 
     def IsActive(self):
-        return FreeCAD.ActiveDocument is not None
+        if FreeCAD.ActiveDocument is not None:
+            for o in FreeCAD.ActiveDocument.Objects:
+                if o.Name[:3] == "Job":
+                        return True
+        return False
 
     def Activated(self):
         ztop = 10.0
@@ -462,7 +382,6 @@ class CommandPathProfile:
         FreeCADGui.addModule("PathScripts.PathProfile")
         FreeCADGui.doCommand('obj = FreeCAD.ActiveDocument.addObject("Path::FeaturePython", "Profile")')
         FreeCADGui.doCommand('PathScripts.PathProfile.ObjectProfile(obj)')
-        FreeCADGui.doCommand('PathScripts.PathProfile._ViewProviderProfile(obj.ViewObject)')
 
         FreeCADGui.doCommand('obj.Active = True')
 
@@ -474,10 +393,12 @@ class CommandPathProfile:
         FreeCADGui.doCommand('obj.SafeHeight = ' + str(ztop + 2.0))
         FreeCADGui.doCommand('obj.Side = "Left"')
         FreeCADGui.doCommand('obj.OffsetExtra = 0.0')
-        FreeCADGui.doCommand('obj.Direction = "CW"')
+        FreeCADGui.doCommand('obj.Direction = "CCW"')
         FreeCADGui.doCommand('obj.UseComp = False')
-        FreeCADGui.doCommand('obj.PlungeAngle = 90.0')
-        FreeCADGui.doCommand('PathScripts.PathUtils.addToProject(obj)')
+        FreeCADGui.doCommand('obj.processHoles = False')
+        FreeCADGui.doCommand('obj.processPerimeter = True')
+        FreeCADGui.doCommand('PathScripts.PathProfile._ViewProviderProfile(obj.ViewObject)')
+        FreeCADGui.doCommand('PathScripts.PathUtils.addToJob(obj)')
 
         FreeCAD.ActiveDocument.commitTransaction()
         FreeCAD.ActiveDocument.recompute()
@@ -504,81 +425,72 @@ class TaskPanel:
 
     def getFields(self):
         if self.obj:
+
             if hasattr(self.obj, "StartDepth"):
-                self.obj.StartDepth = self.form.startDepth.text()
+                self.obj.StartDepth = FreeCAD.Units.Quantity(self.form.startDepth.text()).Value
             if hasattr(self.obj, "FinalDepth"):
-                self.obj.FinalDepth = self.form.finalDepth.text()
+                self.obj.FinalDepth = FreeCAD.Units.Quantity(self.form.finalDepth.text()).Value
             if hasattr(self.obj, "SafeHeight"):
-                self.obj.SafeHeight = self.form.safeHeight.text()
+                self.obj.SafeHeight = FreeCAD.Units.Quantity(self.form.safeHeight.text()).Value
             if hasattr(self.obj, "ClearanceHeight"):
-                self.obj.ClearanceHeight = self.form.clearanceHeight.text()
+                self.obj.ClearanceHeight = FreeCAD.Units.Quantity(self.form.clearanceHeight.text()).Value
             if hasattr(self.obj, "StepDown"):
-                self.obj.StepDown = self.form.stepDown.value()
+                self.obj.StepDown = FreeCAD.Units.Quantity(self.form.stepDown.text()).Value
             if hasattr(self.obj, "OffsetExtra"):
-                self.obj.OffsetExtra = self.form.extraOffset.value()
-            if hasattr(self.obj, "SegLen"):
-                self.obj.SegLen = self.form.segLen.value()
+                self.obj.OffsetExtra = FreeCAD.Units.Quantity(self.form.extraOffset.text()).Value
             if hasattr(self.obj, "RollRadius"):
-                self.obj.RollRadius = self.form.rollRadius.value()
-            if hasattr(self.obj, "PlungeAngle"):
-                self.obj.PlungeAngle = str(self.form.plungeAngle.value())
+                self.obj.RollRadius = FreeCAD.Units.Quantity(self.form.rollRadius.text()).Value
             if hasattr(self.obj, "UseComp"):
                 self.obj.UseComp = self.form.useCompensation.isChecked()
             if hasattr(self.obj, "UseStartPoint"):
                 self.obj.UseStartPoint = self.form.useStartPoint.isChecked()
             if hasattr(self.obj, "UseEndPoint"):
                 self.obj.UseEndPoint = self.form.useEndPoint.isChecked()
-            if hasattr(self.obj, "Algorithm"):
-                self.obj.Algorithm = str(self.form.algorithmSelect.currentText())
             if hasattr(self.obj, "Side"):
                 self.obj.Side = str(self.form.cutSide.currentText())
             if hasattr(self.obj, "Direction"):
                 self.obj.Direction = str(self.form.direction.currentText())
+            if hasattr(self.obj, "processHoles"):
+                self.obj.processHoles = self.form.processHoles.isChecked()
+            if hasattr(self.obj, "processPerimeter"):
+                self.obj.processPerimeter = self.form.processPerimeter.isChecked()
         self.obj.Proxy.execute(self.obj)
 
     def setFields(self):
-        self.form.startDepth.setText(str(self.obj.StartDepth.Value))
-        self.form.finalDepth.setText(str(self.obj.FinalDepth.Value))
-        self.form.safeHeight.setText(str(self.obj.SafeHeight.Value))
-        self.form.clearanceHeight.setText(str(self.obj.ClearanceHeight.Value))
-        self.form.stepDown.setValue(self.obj.StepDown)
-        self.form.extraOffset.setValue(self.obj.OffsetExtra.Value)
-        self.form.segLen.setValue(self.obj.SegLen.Value)
-        self.form.rollRadius.setValue(self.obj.RollRadius.Value)
-        self.form.plungeAngle.setValue(self.obj.PlungeAngle.Value)
+        self.form.startDepth.setText(FreeCAD.Units.Quantity(self.obj.StartDepth.Value, FreeCAD.Units.Length).UserString)
+        self.form.finalDepth.setText(FreeCAD.Units.Quantity(self.obj.FinalDepth.Value, FreeCAD.Units.Length).UserString)
+        self.form.safeHeight.setText(FreeCAD.Units.Quantity(self.obj.SafeHeight.Value, FreeCAD.Units.Length).UserString)
+        self.form.clearanceHeight.setText(FreeCAD.Units.Quantity(self.obj.ClearanceHeight.Value,  FreeCAD.Units.Length).UserString)
+        self.form.stepDown.setText(FreeCAD.Units.Quantity(self.obj.StepDown.Value, FreeCAD.Units.Length).UserString)
+        self.form.extraOffset.setText(FreeCAD.Units.Quantity(self.obj.OffsetExtra.Value, FreeCAD.Units.Length).UserString)
+        self.form.rollRadius.setText(FreeCAD.Units.Quantity(self.obj.RollRadius.Value, FreeCAD.Units.Length).UserString)
         self.form.useCompensation.setChecked(self.obj.UseComp)
         self.form.useStartPoint.setChecked(self.obj.UseStartPoint)
         self.form.useEndPoint.setChecked(self.obj.UseEndPoint)
-
-        index = self.form.algorithmSelect.findText(
-                self.obj.Algorithm, QtCore.Qt.MatchFixedString)
-        if index >= 0:
-            self.form.algorithmSelect.setCurrentIndex(index)
+        self.form.processHoles.setChecked(self.obj.processHoles)
+        self.form.processPerimeter.setChecked(self.obj.processPerimeter)
 
         index = self.form.cutSide.findText(
                 self.obj.Side, QtCore.Qt.MatchFixedString)
         if index >= 0:
+            self.form.cutSide.blockSignals(True)
             self.form.cutSide.setCurrentIndex(index)
+            self.form.cutSide.blockSignals(False)
 
         index = self.form.direction.findText(
                 self.obj.Direction, QtCore.Qt.MatchFixedString)
         if index >= 0:
+            self.form.direction.blockSignals(True)
             self.form.direction.setCurrentIndex(index)
+            self.form.direction.blockSignals(False)
 
+        self.form.baseList.blockSignals(True)
         for i in self.obj.Base:
             for sub in i[1]:
                 self.form.baseList.addItem(i[0].Name + "." + sub)
+        self.form.baseList.blockSignals(False)
 
-        for i in range(len(self.obj.locs)):
-            item = QtGui.QTreeWidgetItem(self.form.tagTree)
-            item.setText(0, str(i+1))
-            l = self.obj.locs[i]
-            item.setText(1, str(l.x)+", " + str(l.y) + ", " + str(l.z))
-            item.setText(2, str(self.obj.heights[i]))
-            item.setText(3, str(self.obj.lengths[i]))
-            item.setText(4, str(self.obj.angles[i]))
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
-            item.setTextAlignment(0, QtCore.Qt.AlignLeft)
+        self.form.update()
 
     def open(self):
         self.s = SelObserver()
@@ -609,7 +521,6 @@ class TaskPanel:
         for i in self.obj.Base:
             for sub in i[1]:
                 self.form.baseList.addItem(i[0].Name + "." + sub)
-
 
     def deleteBase(self):
         dlist = self.form.baseList.selectedItems()
@@ -653,90 +564,6 @@ class TaskPanel:
     def getStandardButtons(self):
         return int(QtGui.QDialogButtonBox.Ok)
 
-    def edit(self, item, column):
-        if not self.updating:
-            self.resetObject()
-
-    def resetObject(self, remove=None):
-        "transfers the values from the widget to the object"
-        loc = []
-        h = []
-        l = []
-        a = []
-
-        for i in range(self.form.tagTree.topLevelItemCount()):
-            it = self.form.tagTree.findItems(
-                    str(i+1), QtCore.Qt.MatchExactly, 0)[0]
-            if (remove is None) or (remove != i):
-                if it.text(1):
-                    x = float(it.text(1).split()[0].rstrip(","))
-                    y = float(it.text(1).split()[1].rstrip(","))
-                    z = float(it.text(1).split()[2].rstrip(","))
-                    loc.append(Vector(x, y, z))
-
-                else:
-                    loc.append(0.0)
-                if it.text(2):
-                    h.append(float(it.text(2)))
-                else:
-                    h.append(4.0)
-                if it.text(3):
-                    l.append(float(it.text(3)))
-                else:
-                    l.append(5.0)
-                if it.text(4):
-                    a.append(float(it.text(4)))
-                else:
-                    a.append(45.0)
-
-        self.obj.locs = loc
-        self.obj.heights = h
-        self.obj.lengths = l
-        self.obj.angles = a
-
-        self.obj.touch()
-        FreeCAD.ActiveDocument.recompute()
-
-    def addElement(self):
-        self.updating = True
-
-        item = QtGui.QTreeWidgetItem(self.form.tagTree)
-        item.setText(0, str(self.form.tagTree.topLevelItemCount()))
-        item.setText(1, "0.0, 0.0, 0.0")
-        item.setText(2, str(float(4.0)))
-        item.setText(3, str(float(10.0)))
-        item.setText(4, str(float(45.0)))
-        item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
-        self.updating = False
-
-        self.resetObject()
-
-    def removeElement(self):
-        it = self.form.tagTree.currentItem()
-        if it:
-            nr = int(it.text(0))-1
-            self.resetObject(remove=nr)
-            self.update()
-
-    def update(self):
-        'fills the treewidget'
-        self.updating = True
-        self.form.tagTree.clear()
-        if self.obj:
-            for i in range(len(self.obj.locs)):
-                item = QtGui.QTreeWidgetItem(self.form.tagTree)
-                item.setText(0, str(i+1))
-                l = self.obj.locs[i]
-                item.setText(1, str(l.x) + ", " + str(l.y) + ", " + str(l.z))
-                item.setText(2, str(self.obj.heights[i]))
-                item.setText(3, str(self.obj.lengths[i]))
-                item.setText(4, str(self.obj.angles[i]))
-                item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
-                item.setTextAlignment(0, QtCore.Qt.AlignLeft)
-        self.updating = False
-        return
-
-
     def setupUi(self):
 
         # Connect Signals and Slots
@@ -756,23 +583,15 @@ class TaskPanel:
         self.form.clearanceHeight.editingFinished.connect(self.getFields)
 
         # operation
-        self.form.algorithmSelect.currentIndexChanged.connect(self.getFields)
         self.form.cutSide.currentIndexChanged.connect(self.getFields)
         self.form.direction.currentIndexChanged.connect(self.getFields)
         self.form.useCompensation.clicked.connect(self.getFields)
         self.form.useStartPoint.clicked.connect(self.getFields)
         self.form.useEndPoint.clicked.connect(self.getFields)
         self.form.extraOffset.editingFinished.connect(self.getFields)
-        self.form.segLen.editingFinished.connect(self.getFields)
         self.form.rollRadius.editingFinished.connect(self.getFields)
-
-        # Tag Form
-        QtCore.QObject.connect(
-                self.form.tagTree,
-                QtCore.SIGNAL("itemChanged(QTreeWidgetItem *, int)"),
-                self.edit)
-        self.form.addTag.clicked.connect(self.addElement)
-        self.form.deleteTag.clicked.connect(self.removeElement)
+        self.form.processHoles.clicked.connect(self.getFields)
+        self.form.processPerimeter.clicked.connect(self.getFields)
 
         self.setFields()
 
@@ -798,7 +617,6 @@ class SelObserver:
 if FreeCAD.GuiUp:
     # register the FreeCAD command
     FreeCADGui.addCommand('Path_Profile', CommandPathProfile())
-    FreeCADGui.addCommand('Add_Tag', _CommandAddTag())
     FreeCADGui.addCommand('Set_StartPoint', _CommandSetStartPoint())
     FreeCADGui.addCommand('Set_EndPoint', _CommandSetEndPoint())
 

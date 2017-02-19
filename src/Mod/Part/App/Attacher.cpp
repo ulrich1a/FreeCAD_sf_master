@@ -481,6 +481,9 @@ eRefType AttachEngine::getShapeType(const TopoDS_Shape& sh)
         case GeomAbs_BezierCurve:
         case GeomAbs_BSplineCurve:
         case GeomAbs_OtherCurve:
+#if OCC_VERSION_HEX >= 0x070000
+        case GeomAbs_OffsetCurve:
+#endif
             return rtCurve;
         }
     }break;
@@ -733,9 +736,6 @@ GProp_GProps AttachEngine::getInertialPropsOfShape(const std::vector<const TopoD
     default:
         throw Base::Exception("AttachEngine::getInertialPropsOfShape: unexpected shape type");
     }
-
-    assert(false);//exec shouldn't ever get here
-    return GProp_GProps();
 }
 
 /*!
@@ -1580,22 +1580,22 @@ AttachEngineLine *AttachEngineLine::copy() const
 Base::Placement AttachEngineLine::calculateAttachedPlacement(Base::Placement origPlacement) const
 {
     eMapMode mmode = this->mapMode;
-    if (mmode == mmDeactivated)
-        throw ExceptionCancel();//to be handled in positionBySupport, to not do anything if disabled
 
     //modes that are mirrors of attacher3D:
     bool bReUsed = true;
     Base::Placement presuperPlacement;
     switch(mmode){
+    case mmDeactivated:
+        throw ExceptionCancel();//to be handled in positionBySupport, to not do anything if disabled
     case mm1AxisX:
         mmode = mmObjectYZ;
-    break;
+        break;
     case mm1AxisY:
         mmode = mmObjectXZ;
-    break;
+        break;
     case mm1AxisZ:
         mmode = mmObjectXY;
-    break;
+        break;
     case mm1AxisCurv:
         mmode = mmRevolutionSection;
         //the line should go along Y, not Z
@@ -1603,18 +1603,19 @@ Base::Placement AttachEngineLine::calculateAttachedPlacement(Base::Placement ori
                     Base::Rotation(  Base::Vector3d(0.0,0.0,1.0),
                                      Base::Vector3d(0.0,1.0,0.0)  )
                     );
-    break;
+        break;
     case mm1Binormal:
         mmode = mmFrenetTN;
-    break;
+        break;
     case mm1Normal:
         mmode = mmFrenetTB;
-    break;
+        break;
     case mm1Tangent:
         mmode = mmNormalToPath;
-    break;
+        break;
     default:
         bReUsed = false;
+        break;
     }
 
     Base::Placement plm;
@@ -1641,9 +1642,6 @@ Base::Placement AttachEngineLine::calculateAttachedPlacement(Base::Placement ori
 
 
         switch (mmode) {
-        case mmDeactivated:
-            //should have been filtered out already!
-        break;
         case mm1AxisInertia1:
         case mm1AxisInertia2:
         case mm1AxisInertia3:{
@@ -1804,7 +1802,7 @@ Base::Placement AttachEngineLine::calculateAttachedPlacement(Base::Placement ori
 
 //=================================================================================
 
-TYPESYSTEM_SOURCE(Attacher::AttachEnginePoint, Attacher::AttachEngine);
+TYPESYSTEM_SOURCE(Attacher::AttachEnginePoint, Attacher::AttachEngine)
 
 AttachEnginePoint::AttachEnginePoint()
 {
@@ -1848,12 +1846,12 @@ AttachEnginePoint *AttachEnginePoint::copy() const
 Base::Placement AttachEnginePoint::calculateAttachedPlacement(Base::Placement origPlacement) const
 {
     eMapMode mmode = this->mapMode;
-    if (mmode == mmDeactivated)
-        throw ExceptionCancel();//to be handled in positionBySupport, to not do anything if disabled
 
     //modes that are mirrors of attacher3D:
     bool bReUsed = true;
     switch(mmode){
+    case mmDeactivated:
+        throw ExceptionCancel();//to be handled in positionBySupport, to not do anything if disabled
     case mm0Origin:
         mmode = mmObjectXY;
         break;
@@ -1876,7 +1874,7 @@ Base::Placement AttachEnginePoint::calculateAttachedPlacement(Base::Placement or
         std::vector<eRefType> types;
         readLinks(this->references, parts, shapes, copiedShapeStorage, types);
 
-        if (parts.size() == 0)
+        if (parts.empty())
             throw ExceptionCancel();
 
 
@@ -1886,9 +1884,6 @@ Base::Placement AttachEnginePoint::calculateAttachedPlacement(Base::Placement or
 
 
         switch (mmode) {
-        case mmDeactivated:
-            //should have been filtered out already!
-        break;
         case mm0Vertex:{
             std::vector<gp_Pnt> points;
             assert(shapes.size()>0);

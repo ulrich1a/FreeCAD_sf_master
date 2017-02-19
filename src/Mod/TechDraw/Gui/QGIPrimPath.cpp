@@ -40,7 +40,8 @@
 
 using namespace TechDrawGui;
 
-QGIPrimPath::QGIPrimPath()
+QGIPrimPath::QGIPrimPath():
+    m_width(0)
 {
     setCacheMode(QGraphicsItem::NoCache);
     setFlag(QGraphicsItem::ItemIsSelectable, true);
@@ -50,12 +51,14 @@ QGIPrimPath::QGIPrimPath()
     setAcceptHoverEvents(true);
 
     isHighlighted = false;
-    setPrettyNormal();
 
     m_colCurrent = getNormalColor();
     m_styleCurrent = Qt::SolidLine;
     m_pen.setStyle(m_styleCurrent);
     m_pen.setCapStyle(Qt::RoundCap);
+    m_pen.setWidthF(m_width);
+
+    setPrettyNormal();
 }
 
 QVariant QGIPrimPath::itemChange(GraphicsItemChange change, const QVariant &value)
@@ -118,6 +121,7 @@ void QGIPrimPath::paint ( QPainter * painter, const QStyleOptionGraphicsItem * o
     QStyleOptionGraphicsItem myOption(*option);
     myOption.state &= ~QStyle::State_Selected;
 
+    m_pen.setWidthF(m_width);
     m_pen.setColor(m_colCurrent);
     m_pen.setStyle(m_styleCurrent);
     setPen(m_pen);
@@ -126,26 +130,79 @@ void QGIPrimPath::paint ( QPainter * painter, const QStyleOptionGraphicsItem * o
 
 QColor QGIPrimPath::getNormalColor()
 {
-    Base::Reference<ParameterGrp> hGrp = getParmGroup();
-    App::Color fcColor;
-    fcColor.setPackedValue(hGrp->GetUnsigned("NormalColor", 0x00000000));
-    return fcColor.asValue<QColor>();
+    QColor result;
+    QGIView *parent;
+    QGraphicsItem* qparent = parentItem();
+    if (qparent == nullptr) {
+        parent = nullptr;
+    } else {
+        parent = dynamic_cast<QGIView *> (qparent);
+    }
+
+    if (parent != nullptr) {
+        result = parent->getNormalColor();
+    } else {
+        Base::Reference<ParameterGrp> hGrp = getParmGroup();
+        App::Color fcColor;
+        fcColor.setPackedValue(hGrp->GetUnsigned("NormalColor", 0x00000000));
+        result = fcColor.asValue<QColor>();
+    }
+    return result;
 }
 
 QColor QGIPrimPath::getPreColor()
 {
-    Base::Reference<ParameterGrp> hGrp = getParmGroup();
-    App::Color fcColor;
-    fcColor.setPackedValue(hGrp->GetUnsigned("PreSelectColor", 0xFFFF0000));
-    return fcColor.asValue<QColor>();
+    QColor result;
+    QGIView *parent;
+    QGraphicsItem* qparent = parentItem();
+    if (qparent == nullptr) {
+        parent = nullptr;
+    } else {
+        parent = dynamic_cast<QGIView *> (qparent);
+    }
+
+    if (parent != nullptr) {
+        result = parent->getPreColor();
+    } else {
+        Base::Reference<ParameterGrp> hGrp = getParmGroup();
+        App::Color fcColor;
+        fcColor.setPackedValue(hGrp->GetUnsigned("PreSelectColor", 0xFFFF0000));
+        result = fcColor.asValue<QColor>();
+    }
+    return result;
 }
 
 QColor QGIPrimPath::getSelectColor()
 {
-    Base::Reference<ParameterGrp> hGrp = getParmGroup();
-    App::Color fcColor;
-    fcColor.setPackedValue(hGrp->GetUnsigned("SelectColor", 0x00FF0000));
-    return fcColor.asValue<QColor>();
+    QColor result;
+    QGIView *parent;
+    QGraphicsItem* qparent = parentItem();
+    if (qparent == nullptr) {
+        parent = nullptr;
+    } else {
+        parent = dynamic_cast<QGIView *> (qparent);
+    }
+
+    if (parent != nullptr) {
+        result = parent->getSelectColor();
+    } else {
+        Base::Reference<ParameterGrp> hGrp = getParmGroup();
+        App::Color fcColor;
+        fcColor.setPackedValue(hGrp->GetUnsigned("SelectColor", 0x00FF0000));
+        result = fcColor.asValue<QColor>();
+    }
+    return result;
+}
+
+void QGIPrimPath::setWidth(double w)
+{
+    m_width = w;
+    m_pen.setWidthF(m_width);
+}
+
+void QGIPrimPath::setStyle(Qt::PenStyle s)
+{
+    m_styleCurrent = s;
 }
 
 Base::Reference<ParameterGrp> QGIPrimPath::getParmGroup()

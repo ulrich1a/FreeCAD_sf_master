@@ -26,6 +26,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QContextMenuEvent>
+#include <QFile>
+#include <QFileInfo>
 #include <QGraphicsScene>
 #include <QMenu>
 #include <QMouseEvent>
@@ -33,16 +35,19 @@
 #include <QPainterPathStroker>
 #include <QPainter>
 #include <QTextOption>
-#include <strstream>
 #endif
 
 #include <qmath.h>
 
 #include <Base/Console.h>
+#include <App/Material.h>
 
+#include <Mod/TechDraw/App/DrawGeomHatch.h>
 #include <Mod/TechDraw/App/DrawViewSection.h>
 
+
 #include "ZVALUE.h"
+#include "ViewProviderViewSection.h"
 #include "QGIFace.h"
 #include "QGIViewSection.h"
 
@@ -60,30 +65,72 @@ void QGIViewSection::draw()
 
 void QGIViewSection::drawSectionFace()
 {
-    if(getViewObject() == 0 || !getViewObject()->isDerivedFrom(TechDraw::DrawViewSection::getClassTypeId()))
-        return;
-
-    TechDraw::DrawViewSection *section = dynamic_cast<TechDraw::DrawViewSection *>(getViewObject());
-    if (!section->hasGeometry()) {
+    auto section( dynamic_cast<TechDraw::DrawViewSection *>(getViewObject()) );
+    if( section == nullptr ) {
         return;
     }
 
-    if (!section->ShowCutSurface.getValue()) {
+    if ( !section->hasGeometry()) {
+        return;
+    }
+    Gui::ViewProvider* gvp = QGIView::getViewProvider(section);
+    ViewProviderViewSection* sectionVp = dynamic_cast<ViewProviderViewSection*>(gvp);
+    if ((sectionVp == nullptr)  ||
+        (!sectionVp->ShowCutSurface.getValue())) {
         return;
     }
 
-    std::vector<TechDrawGeometry::Face*> sectionFaces;
-    sectionFaces = section->getFaceGeometry();
+    auto sectionFaces( section->getFaceGeometry() );
     if (sectionFaces.empty()) {
-        Base::Console().Log("INFO - QGIViewSection::drawSectionFace - No sectionFaces available. Check Section plane.\n");
+        //Base::Console().Log("INFO - QGIViewSection::drawSectionFace - No sectionFaces available. Check Section plane.\n");
         return;
     }
+
     std::vector<TechDrawGeometry::Face *>::iterator fit = sectionFaces.begin();
-    QColor faceColor = section->CutSurfaceColor.getValue().asValue<QColor>();
-    for(; fit != sectionFaces.end(); fit++) {
-        QGIFace* newFace = drawFace(*fit,-1);  //TODO: do we need to know which sectionFace this QGIFace came from?
+    QColor faceColor = (sectionVp->CutSurfaceColor.getValue()).asValue<QColor>();
+    int i = 0;
+    for(; fit != sectionFaces.end(); fit++, i++) {
+        QGIFace* newFace = drawFace(*fit,-1);
         newFace->setZValue(ZVALUE::SECTIONFACE);
+        if (section->showSectionEdges()) {
+            newFace->setDrawEdges(true);
+        } else {
+            newFace->setDrawEdges(false);
+        }
         newFace->setFill(faceColor, Qt::SolidPattern);
+
+        if (sectionVp->HatchCutSurface.getValue()) {
+            newFace->isHatched(true);
+            newFace->setFillMode(QGIFace::FromFile);
+            newFace->setHatchColor(sectionVp->HatchColor.getValue());
+            newFace->setHatchScale(section->HatchScale.getValue());
+
+            std::string hatchFile = section->FileHatchPattern.getValue();
+            newFace->setHatchFile(hatchFile);
+            std::string patternName = section->NameGeomPattern.getValue();
+            QFileInfo hfi(QString::fromUtf8(hatchFile.data(),hatchFile.size()));
+            if (hfi.isReadable()) {
+                QString ext = hfi.suffix();
+                if ((ext.toUpper() == QString::fromUtf8("PAT")) &&
+                    !patternName.empty() )  {
+                    newFace->setFillMode(QGIFace::GeomHatchFill);
+                    newFace->setLineWeight(sectionVp->WeightPattern.getValue());
+                    std::vector<LineSet> lineSets = section->getDrawableLines(i);
+                    if (!lineSets.empty()) {
+                        newFace->clearLineSets();
+                        for (auto& ls: lineSets) {
+                            QPainterPath bigPath;
+                            for (auto& g: ls.getGeoms()) {
+                                QPainterPath smallPath = drawPainterPath(g);
+                                bigPath.addPath(smallPath);
+                            }
+                            newFace->addLineSet(bigPath,ls.getDashSpec());
+                        }
+                    }
+                }
+            }
+        }
+        newFace->draw();
         newFace->setPrettyNormal();
         newFace->setAcceptHoverEvents(false);
         newFace->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -92,10 +139,10 @@ void QGIViewSection::drawSectionFace()
 
 void QGIViewSection::updateView(bool update)
 {
-    if(getViewObject() == 0 || !getViewObject()->isDerivedFrom(TechDraw::DrawViewPart::getClassTypeId()))
+    auto viewPart( dynamic_cast<TechDraw::DrawViewSection *>(getViewObject()) );
+    if( viewPart == nullptr ) {
         return;
-
-    TechDraw::DrawViewSection *viewPart = dynamic_cast<TechDraw::DrawViewSection *>(getViewObject());
+    }
 
     if(update ||
        viewPart->SectionNormal.isTouched() ||
@@ -104,4 +151,11 @@ void QGIViewSection::updateView(bool update)
     } else {
         QGIViewPart::updateView();
     }
+}
+
+void QGIViewSection::drawSectionLine(TechDraw::DrawViewSection* s, bool b)
+{
+    Q_UNUSED(b);
+    Q_UNUSED(s);
+   //override QGIVP::drawSectionLine
 }

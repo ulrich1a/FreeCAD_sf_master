@@ -1,3 +1,4 @@
+from __future__ import print_function
 import datetime
 from PathScripts import PostUtils
 
@@ -25,7 +26,7 @@ from PathScripts import PostUtils
 # ***************************************************************************/
 
 
-'''
+TOOLTIP='''
 This is an postprocessor file for the Path workbench. It will output path data
 in a format suitable for OpenSBP controllers like shopbot.  This postprocessor,
 once placed in the appropriate PathScripts folder, can be used directly from
@@ -74,21 +75,21 @@ if open.__module__ == '__builtin__':
 CurrentState = {}
 
 
-def export(objectslist, filename):
+def export(objectslist, filename, argstring):
     global CurrentState
 
     for obj in objectslist:
         if not hasattr(obj, "Path"):
             s = "the object " + obj.Name
             s += " is not a path. Please select only path and Compounds."
-            print s
+            print(s)
             return
 
     CurrentState = {
         'X': 0, 'Y': 0, 'Z': 0, 'F': 0, 'S': 0,
         'JSXY': 0, 'JSZ': 0, 'MSXY': 0, 'MSZ': 0
     }
-    print "postprocessing..."
+    print("postprocessing...")
     gcode = ""
 
     # write header
@@ -136,11 +137,11 @@ def export(objectslist, filename):
     else:
         final = gcode
 
-    print "done postprocessing."
+    print("done postprocessing.")
 
     # Write the output
     gfile = pythonopen(filename, "wb")
-    gfile.write(gcode)
+    gfile.write(final)
     gfile.close()
 
 
@@ -216,11 +217,11 @@ def move(command):
         txt += "," + format(command.Parameters["Z"], '.4f')
         txt += "\n"
     elif axis == "":
-        print "warning: skipping duplicate move."
+        print("warning: skipping duplicate move.")
     else:
-        print CurrentState
-        print command
-        print "I don't know how to handle '{}' for a move.".format(axis)
+        print(CurrentState)
+        print(command)
+        print("I don't know how to handle '{}' for a move.".format(axis))
 
     return txt
 
@@ -255,7 +256,7 @@ def tool_change(command):
 
 
 def comment(command):
-    print "a comment"
+    print("a comment")
     return
 
 
@@ -314,8 +315,8 @@ def parse(pathobj):
                 if c.Parameters:
                     CurrentState.update(c.Parameters)
             else:
-                print "I don't know what the hell the command: ",
-                print command + " means.  Maybe I should support it."
+                print("I don't know what the hell the command: ",end='')
+                print(command + " means.  Maybe I should support it.")
     return output
 
 
@@ -323,6 +324,4 @@ def linenumber():
     return ""
 
 
-print __name__ + " gcode postprocessor loaded."
-
-# eof
+print(__name__ + " gcode postprocessor loaded.")

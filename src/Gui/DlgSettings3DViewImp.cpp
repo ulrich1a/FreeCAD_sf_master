@@ -85,6 +85,7 @@ void DlgSettings3DViewImp::saveSettings()
     spinBoxZoomStep->onSave();
     CheckBox_CornerCoordSystem->onSave();
     CheckBox_ShowFPS->onSave();
+    CheckBox_useVBO->onSave();
     CheckBox_UseAutoRotation->onSave();
     FloatSpinBox_EyeDistance->onSave();
     checkBoxBacklight->onSave();
@@ -101,6 +102,7 @@ void DlgSettings3DViewImp::loadSettings()
     spinBoxZoomStep->onRestore();
     CheckBox_CornerCoordSystem->onRestore();
     CheckBox_ShowFPS->onRestore();
+    CheckBox_useVBO->onRestore();
     CheckBox_UseAutoRotation->onRestore();
     FloatSpinBox_EyeDistance->onRestore();
     checkBoxBacklight->onRestore();
@@ -135,7 +137,7 @@ void DlgSettings3DViewImp::on_mouseButton_clicked()
 
     QVariant data = comboNavigationStyle->itemData(comboNavigationStyle->currentIndex(), Qt::UserRole);
     void* instance = Base::Type::createInstanceByName((const char*)data.toByteArray());
-    std::auto_ptr<UserNavigationStyle> ns(static_cast<UserNavigationStyle*>(instance));
+    std::unique_ptr<UserNavigationStyle> ns(static_cast<UserNavigationStyle*>(instance));
     ui.groupBox->setTitle(ui.groupBox->title()+QString::fromLatin1(" ")+comboNavigationStyle->currentText());
     QString descr;
     descr = qApp->translate((const char*)data.toByteArray(),ns->mouseButtons(NavigationStyle::SELECTION));

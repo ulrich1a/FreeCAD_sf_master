@@ -50,6 +50,7 @@
 # include <Geom_RectangularTrimmedSurface.hxx>
 # include <Geom_SurfaceOfRevolution.hxx>
 # include <Geom_SurfaceOfLinearExtrusion.hxx>
+# include <GeomAPI_Interpolate.hxx>
 # include <GeomConvert.hxx>
 # include <GeomConvert_CompCurveToBSplineCurve.hxx>
 # include <GeomLProp_CLProps.hxx>
@@ -70,8 +71,12 @@
 # include <gp_Torus.hxx>
 # include <Standard_Real.hxx>
 # include <Standard_Version.hxx>
+# include <Standard_ConstructionError.hxx>
 # include <TColgp_Array1OfPnt.hxx>
 # include <TColgp_Array2OfPnt.hxx>
+# include <TColgp_Array1OfVec.hxx>
+# include <TColgp_HArray1OfPnt.hxx>
+# include <TColStd_HArray1OfBoolean.hxx>
 # include <TColStd_Array1OfReal.hxx>
 # include <TColStd_Array1OfInteger.hxx>
 # include <gp.hxx>
@@ -90,35 +95,36 @@
 # include <GC_MakeSegment.hxx>
 # include <Precision.hxx>
 # include <GeomAPI_ProjectPointOnCurve.hxx>
-
+# include <ShapeConstruct_Curve.hxx>
 #endif
 
-#include "LinePy.h"
 #include <Base/VectorPy.h>
-#include "CirclePy.h"
-#include "EllipsePy.h"
-#include "ArcPy.h"
-#include "ArcOfCirclePy.h"
-#include "ArcOfEllipsePy.h"
-#include "ArcOfParabolaPy.h"
-#include "BezierCurvePy.h"
-#include "BSplineCurvePy.h"
-#include "HyperbolaPy.h"
-#include "ArcOfHyperbolaPy.h"
-#include "OffsetCurvePy.h"
-#include "ParabolaPy.h"
-#include "BezierSurfacePy.h"
-#include "BSplineSurfacePy.h"
-#include "ConePy.h"
-#include "CylinderPy.h"
-#include "OffsetSurfacePy.h"
-#include "PlateSurfacePy.h"
-#include "PlanePy.h"
-#include "RectangularTrimmedSurfacePy.h"
-#include "SpherePy.h"
-#include "SurfaceOfExtrusionPy.h"
-#include "SurfaceOfRevolutionPy.h"
-#include "ToroidPy.h"
+#include <Mod/Part/App/LinePy.h>
+#include <Mod/Part/App/LineSegmentPy.h>
+#include <Mod/Part/App/CirclePy.h>
+#include <Mod/Part/App/EllipsePy.h>
+#include <Mod/Part/App/ArcPy.h>
+#include <Mod/Part/App/ArcOfCirclePy.h>
+#include <Mod/Part/App/ArcOfEllipsePy.h>
+#include <Mod/Part/App/ArcOfParabolaPy.h>
+#include <Mod/Part/App/BezierCurvePy.h>
+#include <Mod/Part/App/BSplineCurvePy.h>
+#include <Mod/Part/App/HyperbolaPy.h>
+#include <Mod/Part/App/ArcOfHyperbolaPy.h>
+#include <Mod/Part/App/OffsetCurvePy.h>
+#include <Mod/Part/App/ParabolaPy.h>
+#include <Mod/Part/App/BezierSurfacePy.h>
+#include <Mod/Part/App/BSplineSurfacePy.h>
+#include <Mod/Part/App/ConePy.h>
+#include <Mod/Part/App/CylinderPy.h>
+#include <Mod/Part/App/OffsetSurfacePy.h>
+#include <Mod/Part/App/PlateSurfacePy.h>
+#include <Mod/Part/App/PlanePy.h>
+#include <Mod/Part/App/RectangularTrimmedSurfacePy.h>
+#include <Mod/Part/App/SpherePy.h>
+#include <Mod/Part/App/SurfaceOfExtrusionPy.h>
+#include <Mod/Part/App/SurfaceOfRevolutionPy.h>
+#include <Mod/Part/App/ToroidPy.h>
 
 #include <Base/Exception.h>
 #include <Base/Writer.h>
@@ -169,7 +175,7 @@ const char* gce_ErrorStatusText(gce_ErrorType et)
 
 // ---------------------------------------------------------------
 
-TYPESYSTEM_SOURCE_ABSTRACT(Part::Geometry,Base::Persistence);
+TYPESYSTEM_SOURCE_ABSTRACT(Part::Geometry,Base::Persistence)
 
 Geometry::Geometry()
   : Construction(false)
@@ -202,7 +208,7 @@ void Geometry::Restore(Base::XMLReader &reader)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomPoint,Part::Geometry);
+TYPESYSTEM_SOURCE(Part::GeomPoint,Part::Geometry)
 
 GeomPoint::GeomPoint()
 {
@@ -295,7 +301,7 @@ PyObject *GeomPoint::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomCurve,Part::Geometry);
+TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomCurve,Part::Geometry)
 
 GeomCurve::GeomCurve()
 {
@@ -310,6 +316,21 @@ TopoDS_Shape GeomCurve::toShape() const
     Handle_Geom_Curve c = Handle_Geom_Curve::DownCast(handle());
     BRepBuilderAPI_MakeEdge mkBuilder(c, c->FirstParameter(), c->LastParameter());
     return mkBuilder.Shape();
+}
+
+GeomBSplineCurve* GeomCurve::toBSpline(double first, double last) const
+{
+    ShapeConstruct_Curve scc;
+    Handle_Geom_Curve c = Handle_Geom_Curve::DownCast(handle());
+    Handle_Geom_BSplineCurve spline = scc.ConvertToBSpline(c, first, last, Precision::Confusion());
+    if (spline.IsNull())
+        throw Base::RuntimeError("Conversion to B-Spline failed");
+    return new GeomBSplineCurve(spline);
+}
+
+GeomBSplineCurve* GeomCurve::toNurbs(double first, double last) const
+{
+    return toBSpline(first, last);
 }
 
 bool GeomCurve::tangent(double u, gp_Dir& dir) const
@@ -379,10 +400,9 @@ bool GeomCurve::closestParameter(const Base::Vector3d& point, double &u) const
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        std::cout << e->GetMessageString() << std::endl;
-        return false;
+        throw Base::RuntimeError(e->GetMessageString());
     }
-    
+
     return false;
 }
 
@@ -392,7 +412,7 @@ bool GeomCurve::closestParameterToBasicCurve(const Base::Vector3d& point, double
     
     if (c->IsKind(STANDARD_TYPE(Geom_TrimmedCurve))){
         Handle_Geom_TrimmedCurve tc = Handle_Geom_TrimmedCurve::DownCast(handle());
-        Handle_Geom_Curve bc = Handle_Geom_Curve::DownCast(tc->BasisCurve());
+        Handle_Geom_Curve bc = tc->BasisCurve();
         try {
             if (!bc.IsNull()) {
                 gp_Pnt pnt(point.x,point.y,point.z);
@@ -403,22 +423,48 @@ bool GeomCurve::closestParameterToBasicCurve(const Base::Vector3d& point, double
         }
         catch (Standard_Failure) {
             Handle_Standard_Failure e = Standard_Failure::Caught();
-            std::cout << e->GetMessageString() << std::endl;
-            return false;
+            throw Base::RuntimeError(e->GetMessageString());
         }
-        
+
         return false;        
-        
     } 
     else {
         return this->closestParameter(point, u);
     }
 }
 
+// -------------------------------------------------
+
+TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomBoundedCurve, Part::GeomCurve)
+
+GeomBoundedCurve::GeomBoundedCurve()
+{
+}
+
+GeomBoundedCurve::~GeomBoundedCurve()
+{
+}
+
+Base::Vector3d GeomBoundedCurve::getStartPoint() const
+{
+    Handle_Geom_BoundedCurve curve =  Handle_Geom_BoundedCurve::DownCast(handle());
+    gp_Pnt pnt = curve->StartPoint();
+
+    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
+}
+
+Base::Vector3d GeomBoundedCurve::getEndPoint() const
+{
+    Handle_Geom_BoundedCurve curve =  Handle_Geom_BoundedCurve::DownCast(handle());
+    gp_Pnt pnt = curve->EndPoint();
+
+    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
+}
+
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomBezierCurve,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomBezierCurve,Part::GeomBoundedCurve)
 
 GeomBezierCurve::GeomBezierCurve()
 {
@@ -467,7 +513,7 @@ PyObject *GeomBezierCurve::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomBSplineCurve,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomBSplineCurve,Part::GeomBoundedCurve)
 
 GeomBSplineCurve::GeomBSplineCurve()
 {
@@ -522,13 +568,34 @@ void GeomBSplineCurve::setPole(int index, const Base::Vector3d& pole, double wei
     try {
         gp_Pnt pnt(pole.x,pole.y,pole.z);
         if (weight < 0.0)
-            myCurve->SetPole(index+1,pnt);
+            myCurve->SetPole(index,pnt);
         else
-            myCurve->SetPole(index+1,pnt,weight);
+            myCurve->SetPole(index,pnt,weight);
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        std::cout << e->GetMessageString() << std::endl;
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+void GeomBSplineCurve::setPoles(const std::vector<Base::Vector3d>& poles, const std::vector<double>& weights)
+{
+    if (poles.size() != weights.size())
+        throw Base::ValueError("knots and multiplicities mismatch");
+
+    Standard_Integer index=1;
+
+    for (std::size_t it = 0; it < poles.size(); it++, index++) {
+        setPole(index, poles[it], weights[it]);
+    }
+}
+
+void GeomBSplineCurve::setPoles(const std::vector<Base::Vector3d>& poles)
+{
+    Standard_Integer index=1;
+
+    for (std::vector<Base::Vector3d>::const_iterator it = poles.begin(); it != poles.end(); ++it, index++){
+        setPole(index, *it);
     }
 }
 
@@ -546,6 +613,108 @@ std::vector<Base::Vector3d> GeomBSplineCurve::getPoles() const
     return poles;
 }
 
+std::vector<double> GeomBSplineCurve::getWeights() const
+{
+    std::vector<double> weights;
+    weights.reserve(myCurve->NbPoles());
+    TColStd_Array1OfReal w(1,myCurve->NbPoles());
+    myCurve->Weights(w);
+
+    for (Standard_Integer i=w.Lower(); i<=w.Upper(); i++) {
+        const Standard_Real& real = w(i);
+        weights.push_back(real);
+    }
+    return weights;
+}
+
+void GeomBSplineCurve::setWeights(const std::vector<double>& weights)
+{
+    try {
+        Standard_Integer index=1;
+
+        for (std::vector<double>::const_iterator it = weights.begin(); it != weights.end(); ++it, index++){
+            myCurve->SetWeight(index, *it);
+        }
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+void GeomBSplineCurve::setKnot(int index, const double val, int mult)
+{
+    try {
+        if (mult < 0)
+            myCurve->SetKnot(index, val);
+        else
+            myCurve->SetKnot(index, val, mult);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+void GeomBSplineCurve::setKnots(const std::vector<double>& knots)
+{
+    Standard_Integer index=1;
+
+    for (std::vector<double>::const_iterator it = knots.begin(); it != knots.end(); ++it, index++) {
+        setKnot(index, *it);
+    }
+}
+
+void GeomBSplineCurve::setKnots(const std::vector<double>& knots, const std::vector<int>& multiplicities)
+{
+    if (knots.size() != multiplicities.size())
+        throw Base::ValueError("knots and multiplicities mismatch");
+
+    Standard_Integer index=1;
+
+    for (std::size_t it = 0; it < knots.size(); it++, index++) {
+        setKnot(index, knots[it], multiplicities[it]);
+    }
+}
+
+std::vector<double> GeomBSplineCurve::getKnots() const
+{
+    std::vector<double> knots;
+    knots.reserve(myCurve->NbKnots());
+    TColStd_Array1OfReal k(1,myCurve->NbKnots());
+    myCurve->Knots(k);
+
+    for (Standard_Integer i=k.Lower(); i<=k.Upper(); i++) {
+        const Standard_Real& real = k(i);
+        knots.push_back(real);
+    }
+    return knots;
+}
+
+std::vector<int> GeomBSplineCurve::getMultiplicities() const
+{
+    std::vector<int> mults;
+    mults.reserve(myCurve->NbKnots());
+    TColStd_Array1OfInteger m(1,myCurve->NbKnots());
+    myCurve->Multiplicities(m);
+
+    for (Standard_Integer i=m.Lower(); i<=m.Upper(); i++) {
+        const Standard_Integer& nm = m(i);
+        mults.push_back(nm);
+    }
+    return mults;
+}
+
+int GeomBSplineCurve::getDegree() const
+{
+    return myCurve->Degree();
+}
+
+bool GeomBSplineCurve::isPeriodic() const
+{
+    return myCurve->IsPeriodic()==Standard_True;
+}
+
 bool GeomBSplineCurve::join(const Handle_Geom_BSplineCurve& spline)
 {
     GeomConvert_CompCurveToBSplineCurve ccbc(this->myCurve);
@@ -555,15 +724,211 @@ bool GeomBSplineCurve::join(const Handle_Geom_BSplineCurve& spline)
     return true;
 }
 
+void GeomBSplineCurve::interpolate(const std::vector<gp_Pnt>& p,
+                                   const std::vector<gp_Vec>& t)
+{
+    if (p.size() < 2)
+        Standard_ConstructionError::Raise();
+    if (p.size() != t.size())
+        Standard_ConstructionError::Raise();
+
+    double tol3d = Precision::Approximation();
+    Handle_TColgp_HArray1OfPnt pts = new TColgp_HArray1OfPnt(1, p.size());
+    for (std::size_t i=0; i<p.size(); i++) {
+        pts->SetValue(i+1, p[i]);
+    }
+
+    TColgp_Array1OfVec tgs(1, t.size());
+    Handle_TColStd_HArray1OfBoolean fgs = new TColStd_HArray1OfBoolean(1, t.size());
+    for (std::size_t i=0; i<p.size(); i++) {
+        tgs.SetValue(i+1, t[i]);
+        fgs->SetValue(i+1, Standard_True);
+    }
+
+    GeomAPI_Interpolate interpolate(pts, Standard_False, tol3d);
+    interpolate.Load(tgs, fgs);
+    interpolate.Perform();
+    this->myCurve = interpolate.Curve();
+}
+
+void GeomBSplineCurve::getCardinalSplineTangents(const std::vector<gp_Pnt>& p,
+                                                 const std::vector<double>& c,
+                                                 std::vector<gp_Vec>& t) const
+{
+    // https://de.wikipedia.org/wiki/Kubisch_Hermitescher_Spline#Cardinal_Spline
+    if (p.size() < 2)
+        Standard_ConstructionError::Raise();
+    if (p.size() != c.size())
+        Standard_ConstructionError::Raise();
+
+    t.resize(p.size());
+    if (p.size() == 2) {
+        t[0] = gp_Vec(p[0], p[1]);
+        t[1] = gp_Vec(p[0], p[1]);
+    }
+    else {
+        std::size_t e = p.size() - 1;
+
+        for (std::size_t i = 1; i < e; i++) {
+            gp_Vec v = gp_Vec(p[i-1], p[i+1]);
+            double f = 0.5 * (1-c[i]);
+            v.Scale(f);
+            t[i] = v;
+        }
+
+        t[0] = t[1];
+        t[t.size()-1] = t[t.size()-2];
+    }
+}
+
+void GeomBSplineCurve::getCardinalSplineTangents(const std::vector<gp_Pnt>& p, double c,
+                                                 std::vector<gp_Vec>& t) const
+{
+    // https://de.wikipedia.org/wiki/Kubisch_Hermitescher_Spline#Cardinal_Spline
+    if (p.size() < 2)
+        Standard_ConstructionError::Raise();
+
+    t.resize(p.size());
+    if (p.size() == 2) {
+        t[0] = gp_Vec(p[0], p[1]);
+        t[1] = gp_Vec(p[0], p[1]);
+    }
+    else {
+        std::size_t e = p.size() - 1;
+        double f = 0.5 * (1-c);
+
+        for (std::size_t i = 1; i < e; i++) {
+            gp_Vec v = gp_Vec(p[i-1], p[i+1]);
+            v.Scale(f);
+            t[i] = v;
+        }
+
+        t[0] = t[1];
+        t[t.size()-1] = t[t.size()-2];
+    }
+}
+
 void GeomBSplineCurve::makeC1Continuous(double tol, double ang_tol)
 {
     GeomConvert::C0BSplineToC1BSplineCurve(this->myCurve, tol, ang_tol);
 }
 
 // Persistence implementer 
-unsigned int GeomBSplineCurve::getMemSize (void) const               {assert(0); return 0;/* not implemented yet */}
-void         GeomBSplineCurve::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
-void         GeomBSplineCurve::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
+unsigned int GeomBSplineCurve::getMemSize (void) const
+{
+    return sizeof(Geom_BSplineCurve);
+}
+
+void GeomBSplineCurve::Save(Base::Writer& writer) const
+{
+    // save the attributes of the father class
+    GeomCurve::Save(writer);
+
+    std::vector<Base::Vector3d> poles   = this->getPoles();
+    std::vector<double> weights         = this->getWeights();
+    std::vector<double> knots           = this->getKnots();
+    std::vector<int> mults              = this->getMultiplicities();
+    int degree                          = this->getDegree();
+    bool isperiodic                     = this->isPeriodic();
+
+    writer.Stream()
+         << writer.ind()
+             << "<BSplineCurve "
+                << "PolesCount=\"" <<  poles.size() <<
+                 "\" KnotsCount=\"" <<  knots.size() <<
+                 "\" Degree=\"" <<  degree <<
+                 "\" IsPeriodic=\"" <<  (int) isperiodic <<
+             "\">" << endl;
+
+    writer.incInd();
+    
+    std::vector<Base::Vector3d>::const_iterator itp;
+    std::vector<double>::const_iterator itw;
+    
+    for (itp = poles.begin(), itw = weights.begin(); itp != poles.end() && itw != weights.end(); ++itp, ++itw) {
+        writer.Stream()
+            << writer.ind()
+            << "<Pole "
+            << "X=\"" << (*itp).x <<
+            "\" Y=\"" << (*itp).y <<
+            "\" Z=\"" << (*itp).z <<
+            "\" Weight=\"" << (*itw) <<
+        "\"/>" << endl;
+    }
+
+    std::vector<double>::const_iterator itk;
+    std::vector<int>::const_iterator itm;
+
+    for (itk = knots.begin(), itm = mults.begin(); itk != knots.end() && itm != mults.end(); ++itk, ++itm) {
+        writer.Stream()
+            << writer.ind()
+            << "<Knot "
+            << "Value=\"" << (*itk)
+            << "\" Mult=\"" << (*itm) <<
+        "\"/>" << endl;
+    }
+
+    writer.decInd();
+    writer.Stream() << writer.ind() << "</BSplineCurve>" << endl ;
+}
+
+void GeomBSplineCurve::Restore(Base::XMLReader& reader)
+{
+    // read the attributes of the father class
+    GeomCurve::Restore(reader);
+
+    reader.readElement("BSplineCurve");
+    // get the value of my attribute
+    int polescount = reader.getAttributeAsInteger("PolesCount");
+    int knotscount = reader.getAttributeAsInteger("KnotsCount");
+    int degree = reader.getAttributeAsInteger("Degree");
+    bool isperiodic = (bool) reader.getAttributeAsInteger("IsPeriodic");
+
+    // Handle_Geom_BSplineCurve spline = new 
+    // Geom_BSplineCurve(occpoles,occweights,occknots,occmults,degree,
+    // PyObject_IsTrue(periodic) ? Standard_True : Standard_False,
+    // PyObject_IsTrue(CheckRational) ? Standard_True : Standard_False);    
+
+    TColgp_Array1OfPnt p(1,polescount);
+    TColStd_Array1OfReal w(1,polescount);
+    TColStd_Array1OfReal k(1,knotscount);
+    TColStd_Array1OfInteger m(1,knotscount);
+
+    for (int i = 1; i <= polescount; i++) {
+        reader.readElement("Pole");
+        double X = reader.getAttributeAsFloat("X");
+        double Y = reader.getAttributeAsFloat("Y");
+        double Z = reader.getAttributeAsFloat("Z");
+        double W = reader.getAttributeAsFloat("Weight");
+        p.SetValue(i, gp_Pnt(X,Y,Z));
+        w.SetValue(i, W);
+    }
+
+    for (int i = 1; i <= knotscount; i++) {
+        reader.readElement("Knot");
+        double val = reader.getAttributeAsFloat("Value");
+        Standard_Integer mult = reader.getAttributeAsInteger("Mult");
+        k.SetValue(i, val);
+        m.SetValue(i, mult);
+    }
+
+    reader.readEndElement("BSplineCurve");
+    // Geom_BSplineCurve(occpoles,occweights,occknots,occmults,degree,periodic,CheckRational
+
+    try {
+        Handle_Geom_BSplineCurve spline = new Geom_BSplineCurve(p, w, k, m, degree, isperiodic ? Standard_True : Standard_False, Standard_False);
+
+        if (!spline.IsNull())
+            this->myCurve = spline;
+        else
+            throw Base::RuntimeError("BSpline restore failed");
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
 
 PyObject *GeomBSplineCurve::getPyObject(void)
 {
@@ -572,7 +937,327 @@ PyObject *GeomBSplineCurve::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomCircle,Part::GeomCurve);
+TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomConic, Part::GeomCurve)
+
+GeomConic::GeomConic()
+{
+}
+
+GeomConic::~GeomConic()
+{
+}
+
+Base::Vector3d GeomConic::getLocation(void) const
+{
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+    gp_Ax1 axis = conic->Axis();
+    const gp_Pnt& loc = axis.Location();
+    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
+}
+
+void GeomConic::setLocation(const Base::Vector3d& Center)
+{
+    gp_Pnt p1(Center.x,Center.y,Center.z);
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+
+    try {
+        conic->SetLocation(p1);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+Base::Vector3d GeomConic::getCenter(void) const
+{
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+    gp_Ax1 axis = conic->Axis();
+    const gp_Pnt& loc = axis.Location();
+    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
+}
+
+void GeomConic::setCenter(const Base::Vector3d& Center)
+{
+    gp_Pnt p1(Center.x,Center.y,Center.z);
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+
+    try {
+        conic->SetLocation(p1);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+/*!
+ * \brief GeomConic::getAngleXU
+ * \return The angle between ellipse's major axis (in direction to focus1) and
+ * X axis of a default axis system in the plane of ellipse. The angle is
+ * counted CCW as seen when looking at the ellipse so that ellipse's axis is
+ * pointing at you. Note that this function may give unexpected results when
+ * the ellipse is in XY, but reversed, because the X axis of the default axis
+ * system is reversed compared to the global X axis. This angle, in conjunction
+ * with ellipse's axis, fully defines the orientation of the ellipse.
+ */
+double GeomConic::getAngleXU(void) const
+{
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+
+    gp_Pnt center = conic->Axis().Location();
+    gp_Dir normal = conic->Axis().Direction();
+    gp_Dir xdir = conic->XAxis().Direction();
+
+
+    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
+
+    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
+
+}
+
+/*!
+ * \brief GeomConic::setAngleXU complements getAngleXU.
+ * \param angle
+ */
+void GeomConic::setAngleXU(double angle)
+{
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());;
+
+    try {
+        gp_Pnt center = conic->Axis().Location();
+        gp_Dir normal = conic->Axis().Direction();
+
+        gp_Ax1 normaxis(center, normal);
+        gp_Ax2 xdirref(center, normal);
+
+        xdirref.Rotate(normaxis,angle);
+        conic->SetPosition(xdirref);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+/*!
+ * \brief GeomConic::isReversed tests if an ellipse that lies in XY plane
+ * is reversed (i.e. drawn from startpoint to endpoint in CW direction instead
+ * of CCW.)
+ * \return Returns True if the arc is CW and false if CCW.
+ */
+bool GeomConic::isReversed() const
+{
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+    assert(!conic.IsNull());
+    return conic->Axis().Direction().Z() < 0;
+}
+
+// -------------------------------------------------
+
+TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomArcOfConic,Part::GeomCurve)
+
+GeomArcOfConic::GeomArcOfConic()
+{
+}
+
+GeomArcOfConic::~GeomArcOfConic()
+{
+}
+
+/*!
+ * \brief GeomArcOfConic::getStartPoint
+ * \param emulateCCWXY: if true, the arc will pretent to be a CCW arc in XY plane.
+ * For this to work, the arc must lie in XY plane (i.e. Axis is either +Z or -Z).
+ * \return XYZ of the arc's starting point.
+ */
+Base::Vector3d GeomArcOfConic::getStartPoint(bool emulateCCWXY) const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    gp_Pnt pnt = curve->StartPoint();
+    if (emulateCCWXY) {
+        if (isReversed())
+            pnt = curve->EndPoint();
+    }
+    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
+}
+
+/*!
+ * \brief GeomArcOfConic::getEndPoint
+ * \param emulateCCWXY: if true, the arc will pretent to be a CCW arc in XY plane.
+ * For this to work, the arc must lie in XY plane (i.e. Axis is either +Z or -Z).
+ * \return
+ */
+Base::Vector3d GeomArcOfConic::getEndPoint(bool emulateCCWXY) const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    gp_Pnt pnt = curve->EndPoint();
+    if (emulateCCWXY) {
+        if (isReversed())
+            pnt = curve->StartPoint();
+    }
+    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
+}
+
+Base::Vector3d GeomArcOfConic::getCenter(void) const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+    gp_Ax1 axis = conic->Axis();
+    const gp_Pnt& loc = axis.Location();
+    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
+}
+
+Base::Vector3d GeomArcOfConic::getLocation(void) const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+    gp_Ax1 axis = conic->Axis();
+    const gp_Pnt& loc = axis.Location();
+    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
+}
+
+void GeomArcOfConic::setCenter(const Base::Vector3d& Center)
+{
+    gp_Pnt p1(Center.x,Center.y,Center.z);
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+
+    try {
+        conic->SetLocation(p1);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+void GeomArcOfConic::setLocation(const Base::Vector3d& Center)
+{
+    gp_Pnt p1(Center.x,Center.y,Center.z);
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+
+    try {
+        conic->SetLocation(p1);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+/*!
+ * \brief GeomArcOfConic::isReversed
+ * \return tests if an arc that lies in XY plane is reversed (i.e. drawn from
+ * startpoint to endpoint in CW direction instead of CCW.). Returns True if the
+ * arc is CW and false if CCW.
+ */
+bool GeomArcOfConic::isReversed() const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+    assert(!conic.IsNull());
+    return conic->Axis().Direction().Z() < 0;
+}
+
+/*!
+ * \brief GeomArcOfConic::getAngleXU
+ * \return The angle between ellipse's major axis (in direction to focus1) and
+ * X axis of a default axis system in the plane of ellipse. The angle is
+ * counted CCW as seen when looking at the ellipse so that ellipse's axis is
+ * pointing at you. Note that this function may give unexpected results when
+ * the ellipse is in XY, but reversed, because the X axis of the default axis
+ * system is reversed compared to the global X axis. This angle, in conjunction
+ * with ellipse's axis, fully defines the orientation of the ellipse.
+ */
+double GeomArcOfConic::getAngleXU(void) const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+
+    gp_Pnt center = conic->Axis().Location();
+    gp_Dir normal = conic->Axis().Direction();
+    gp_Dir xdir = conic->XAxis().Direction();
+
+    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
+
+    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
+}
+
+/*!
+ * \brief GeomArcOfConic::setAngleXU complements getAngleXU.
+ */
+void GeomArcOfConic::setAngleXU(double angle)
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+
+    try {
+        gp_Pnt center = conic->Axis().Location();
+        gp_Dir normal = conic->Axis().Direction();
+
+        gp_Ax1 normaxis(center, normal);
+        gp_Ax2 xdirref(center, normal);
+
+        xdirref.Rotate(normaxis,angle);
+        conic->SetPosition(xdirref);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+/*!
+ * \brief GeomArcOfConic::getXAxisDir
+ * \return the direction vector (unit-length) of symmetry axis of the conic. The
+ * direction also points to the focus of a parabola.
+ */
+Base::Vector3d GeomArcOfConic::getXAxisDir() const
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic c = Handle_Geom_Conic::DownCast( curve->BasisCurve() );
+    assert(!c.IsNull());
+    gp_Dir xdir = c->XAxis().Direction();
+    return Base::Vector3d(xdir.X(), xdir.Y(), xdir.Z());
+}
+
+/*!
+ * \brief GeomArcOfConic::setXAxisDir Rotates the conic in its plane, so
+ * that its symmetry axis is as close as possible to the provided direction.
+ * \param newdir [in] is the new direction. If the vector is small, the
+ * orientation of the conic will be preserved. If the vector is not small,
+ * but its projection onto plane of the conic is small, an exception will be
+ * thrown.
+ */
+void GeomArcOfConic::setXAxisDir(const Base::Vector3d& newdir)
+{
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Conic c = Handle_Geom_Conic::DownCast( curve->BasisCurve() );
+    assert(!c.IsNull());
+#if OCC_VERSION_HEX >= 0x060504
+    if (newdir.Sqr() < Precision::SquareConfusion())
+#else
+    if (newdir.Length() < Precision::Confusion())
+#endif
+        return;//zero vector was passed. Keep the old orientation.
+
+    try {
+        gp_Ax2 pos = c->Position();
+        //OCC should keep the old main Direction (Z), and change YDirection to accomodate the new XDirection.
+        pos.SetXDirection(gp_Dir(newdir.x, newdir.y, newdir.z));
+        c->SetPosition(pos);
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+}
+
+// -------------------------------------------------
+
+TYPESYSTEM_SOURCE(Part::GeomCircle,Part::GeomConic)
 
 GeomCircle::GeomCircle()
 {
@@ -601,32 +1286,57 @@ Geometry *GeomCircle::clone(void) const
     return newCirc;
 }
 
-Base::Vector3d GeomCircle::getCenter(void) const
+GeomBSplineCurve* GeomCircle::toNurbs(double first, double last) const
 {
-    Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(handle());
-    gp_Ax1 axis = circle->Axis();
+    double radius = getRadius();
+    Handle_Geom_Conic conic =  Handle_Geom_Conic::DownCast(handle());
+    gp_Ax1 axis = conic->Axis();
+  //gp_Dir xdir = conic->XAxis().Direction();
+  //Standard_Real angle = gp_Dir(1,0,0).Angle(xdir) + first;
+    Standard_Real angle = first;
     const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
+    //Note: If the matching this way doesn't work reliably then we must compute the
+    //angle so that the point of the curve for 'first' matches the first pole
+    //gp_Pnt pnt = conic->Value(first);
+
+    TColgp_Array1OfPnt poles(1, 7);
+    poles(1) = loc.Translated(gp_Vec(radius, 0, 0));
+    poles(2) = loc.Translated(gp_Vec(radius, 2*radius, 0));
+    poles(3) = loc.Translated(gp_Vec(-radius, 2*radius, 0));
+    poles(4) = loc.Translated(gp_Vec(-radius, 0, 0));
+    poles(5) = loc.Translated(gp_Vec(-radius, -2*radius, 0));
+    poles(6) = loc.Translated(gp_Vec(radius, -2*radius, 0));
+    poles(7) = loc.Translated(gp_Vec(radius, 0, 0));
+
+    TColStd_Array1OfReal weights(1,7);
+    for (int i=1; i<=7; i++) {
+        poles(i).Rotate(axis, angle);
+        weights(i) = 1;
+    }
+    weights(1) = 3;
+    weights(4) = 3;
+    weights(7) = 3;
+
+    TColStd_Array1OfInteger mults(1, 3);
+    mults(1) = 4;
+    mults(2) = 3;
+    mults(3) = 4;
+
+    TColStd_Array1OfReal knots(1, 3);
+    knots(1) = 0;
+    knots(2) = M_PI;
+    knots(3) = 2*M_PI;
+
+    Handle_Geom_BSplineCurve spline = new Geom_BSplineCurve(poles, weights,knots, mults, 3,
+        Standard_False, Standard_True);
+    spline->Segment(0, last-first);
+    return new GeomBSplineCurve(spline);
 }
 
 double GeomCircle::getRadius(void) const
 {
     Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(handle());
     return circle->Radius();
-}
-
-void GeomCircle::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(handle());
-
-    try {
-        circle->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
 }
 
 void GeomCircle::setRadius(double Radius)
@@ -640,15 +1350,8 @@ void GeomCircle::setRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
-}
-
-bool GeomCircle::isReversed() const
-{
-    Handle_Geom_Circle c =  myCurve;
-    assert(!c.IsNull());
-    return c->Axis().Direction().Z() < 0;
 }
 
 // Persistence implementer 
@@ -707,18 +1410,18 @@ void GeomCircle::Restore(Base::XMLReader& reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
 PyObject *GeomCircle::getPyObject(void)
 {
-    return new CirclePy((GeomCircle*)this->clone());
+    return new CirclePy(static_cast<GeomCircle*>(this->clone()));
 }
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomArcOfCircle,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomArcOfCircle,Part::GeomArcOfConic)
 
 GeomArcOfCircle::GeomArcOfCircle()
 {
@@ -756,62 +1459,17 @@ Geometry *GeomArcOfCircle::clone(void) const
     return copy;
 }
 
-/*!
- * \brief GeomArcOfCircle::getStartPoint
- * \param emulateCCWXY: if true, the arc will pretent to be a CCW arc in XY plane.
- * For this to work, the arc must lie in XY plane (i.e. Axis is either +Z or -Z).
- * \return XYZ of the arc's starting point.
- */
-Base::Vector3d GeomArcOfCircle::getStartPoint(bool emulateCCWXY) const
+GeomBSplineCurve* GeomArcOfCircle::toNurbs(double first, double last) const
 {
-    gp_Pnt pnt = this->myCurve->StartPoint();
-    if(emulateCCWXY)
-        if(isReversedInXY())
-            pnt = this->myCurve->EndPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-/*!
- * \brief GeomArcOfCircle::getEndPoint
- * \param emulateCCWXY: if true, the arc will pretent to be a CCW arc in XY plane.
- * For this to work, the arc must lie in XY plane (i.e. Axis is either +Z or -Z).
- * \return
- */
-Base::Vector3d GeomArcOfCircle::getEndPoint(bool emulateCCWXY) const
-{
-    gp_Pnt pnt = this->myCurve->EndPoint();
-    if(emulateCCWXY)
-        if(isReversedInXY())
-            pnt = this->myCurve->StartPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-Base::Vector3d GeomArcOfCircle::getCenter(void) const
-{
-    Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(myCurve->BasisCurve());
-    gp_Ax1 axis = circle->Axis();
-    const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(curve->BasisCurve());
+    return GeomCircle(circle).toNurbs(first, last);
 }
 
 double GeomArcOfCircle::getRadius(void) const
 {
     Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(myCurve->BasisCurve());
     return circle->Radius();
-}
-
-void GeomArcOfCircle::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Circle circle = Handle_Geom_Circle::DownCast(myCurve->BasisCurve());
-
-    try {
-        circle->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
 }
 
 void GeomArcOfCircle::setRadius(double Radius)
@@ -825,7 +1483,7 @@ void GeomArcOfCircle::setRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -840,17 +1498,19 @@ void GeomArcOfCircle::setRadius(double Radius)
  */
 void GeomArcOfCircle::getRange(double& u, double& v, bool emulateCCWXY) const
 {
-    u = myCurve->FirstParameter();
-    v = myCurve->LastParameter();
-    if(emulateCCWXY){
-        Handle_Geom_Circle cir = Handle_Geom_Circle::DownCast(myCurve->BasisCurve());
-        double angleXU = -cir->Position().XDirection().AngleWithRef(gp_Dir(1.0,0.0,0.0), gp_Dir(0.0,0.0,1.0));
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    u = curve->FirstParameter();
+    v = curve->LastParameter();
+    if (emulateCCWXY){
+        Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+        double angleXU = -conic->Position().XDirection().AngleWithRef(gp_Dir(1.0,0.0,0.0), gp_Dir(0.0,0.0,1.0));
         double u1 = u, v1 = v;//the true arc curve parameters, cached. u,v will contain the rotation-corrected and swapped angles.
-        if(cir->Axis().Direction().Z() > 0.0){
+        if (conic->Axis().Direction().Z() > 0.0){
             //normal CCW arc
             u = u1 + angleXU;
             v = v1 + angleXU;
-        } else {
+        }
+        else {
             //reversed (CW) arc
             u = angleXU - v1;
             v = angleXU - u1;
@@ -860,9 +1520,7 @@ void GeomArcOfCircle::getRange(double& u, double& v, bool emulateCCWXY) const
             v += 2*M_PI;
         if (v-u > 2*M_PI)
             v -= 2*M_PI;
-
     }
-
 }
 
 /*!
@@ -876,42 +1534,30 @@ void GeomArcOfCircle::getRange(double& u, double& v, bool emulateCCWXY) const
  */
 void GeomArcOfCircle::setRange(double u, double v, bool emulateCCWXY)
 {
-
     try {
-        if(emulateCCWXY){
-            Handle_Geom_Circle cir = Handle_Geom_Circle::DownCast(myCurve->BasisCurve());
-            double angleXU = -cir->Position().XDirection().AngleWithRef(gp_Dir(1.0,0.0,0.0), gp_Dir(0.0,0.0,1.0));
+        Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+        if (emulateCCWXY){
+            Handle_Geom_Conic conic = Handle_Geom_Conic::DownCast(curve->BasisCurve());
+            double angleXU = -conic->Position().XDirection().AngleWithRef(gp_Dir(1.0,0.0,0.0), gp_Dir(0.0,0.0,1.0));
             double u1 = u, v1 = v;//the values that were passed, ccw angles from X axis. u,v will contain the rotation-corrected and swapped angles.
-            if(cir->Axis().Direction().Z() > 0.0){
+            if (conic->Axis().Direction().Z() > 0.0){
                 //normal CCW arc
                 u = u1 - angleXU;
                 v = v1 - angleXU;
-            } else {
+            }
+            else {
                 //reversed (CW) arc
                 u = angleXU - v1;
                 v = angleXU - u1;
             }
         }
 
-        myCurve->SetTrim(u, v);
+        curve->SetTrim(u, v);
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
-}
-
-/*!
- * \brief GeomArcOfCircle::isReversedInXY
- * \return tests if an arc that lies in XY plane is reversed (i.e. drawn from
- * startpoint to endpoint in CW direction instead of CCW.). Returns True if the
- * arc is CW and false if CCW.
- */
-bool GeomArcOfCircle::isReversedInXY() const
-{
-    Handle_Geom_Circle c = Handle_Geom_Circle::DownCast( myCurve->BasisCurve() );
-    assert(!c.IsNull());
-    return c->Axis().Direction().Z() < 0;
 }
 
 // Persistence implementer 
@@ -984,7 +1630,7 @@ void GeomArcOfCircle::Restore(Base::XMLReader &reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -995,7 +1641,7 @@ PyObject *GeomArcOfCircle::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomEllipse,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomEllipse,Part::GeomConic)
 
 GeomEllipse::GeomEllipse()
 {
@@ -1024,26 +1670,52 @@ Geometry *GeomEllipse::clone(void) const
     return newEllipse;
 }
 
-Base::Vector3d GeomEllipse::getCenter(void) const
+GeomBSplineCurve* GeomEllipse::toNurbs(double first, double last) const
 {
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(handle());
-    gp_Ax1 axis = ellipse->Axis();
+    // for an arc of ellipse use the generic method
+    if (first != 0 || last != 2*M_PI) {
+        return GeomCurve::toNurbs(first, last);
+    }
+
+    Handle_Geom_Ellipse conic =  Handle_Geom_Ellipse::DownCast(handle());
+    gp_Ax1 axis = conic->Axis();
+    Standard_Real majorRadius = conic->MajorRadius();
+    Standard_Real minorRadius = conic->MinorRadius();
+    gp_Dir xdir = conic->XAxis().Direction();
+    Standard_Real angle = atan2(xdir.Y(), xdir.X());
     const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
-}
 
-void GeomEllipse::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(handle());
+    TColgp_Array1OfPnt poles(1, 7);
+    poles(1) = loc.Translated(gp_Vec(majorRadius, 0, 0));
+    poles(2) = loc.Translated(gp_Vec(majorRadius, 2*minorRadius, 0));
+    poles(3) = loc.Translated(gp_Vec(-majorRadius, 2*minorRadius, 0));
+    poles(4) = loc.Translated(gp_Vec(-majorRadius, 0, 0));
+    poles(5) = loc.Translated(gp_Vec(-majorRadius, -2*minorRadius, 0));
+    poles(6) = loc.Translated(gp_Vec(majorRadius, -2*minorRadius, 0));
+    poles(7) = loc.Translated(gp_Vec(majorRadius, 0, 0));
 
-    try {
-        ellipse->SetLocation(p1);
+    TColStd_Array1OfReal weights(1,7);
+    for (int i=1; i<=7; i++) {
+        poles(i).Rotate(axis, angle);
+        weights(i) = 1;
     }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
+    weights(1) = 3;
+    weights(4) = 3;
+    weights(7) = 3;
+
+    TColStd_Array1OfInteger mults(1, 3);
+    mults(1) = 4;
+    mults(2) = 3;
+    mults(3) = 4;
+
+    TColStd_Array1OfReal knots(1, 3);
+    knots(1) = 0;
+    knots(2) = 1;
+    knots(3) = 2;
+
+    Handle_Geom_BSplineCurve spline = new Geom_BSplineCurve(poles, weights,knots, mults, 3,
+        Standard_False, Standard_True);
+    return new GeomBSplineCurve(spline);
 }
 
 double GeomEllipse::getMajorRadius(void) const
@@ -1061,7 +1733,7 @@ void GeomEllipse::setMajorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1080,59 +1752,7 @@ void GeomEllipse::setMinorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
-}
-
-/*!
- * \brief GeomEllipse::getAngleXU
- * \return The angle between ellipse's major axis (in direction to focus1) and
- * X axis of a default axis system in the plane of ellipse. The angle is
- * counted CCW as seen when looking at the ellipse so that ellipse's axis is
- * pointing at you. Note that this function may give unexpected results when
- * the ellipse is in XY, but reversed, because the X axis of the default axis
- * system is reversed compared to the global X axis. This angle, in conjunction
- * with ellipse's axis, fully defines the orientation of the ellipse.
- */
-double GeomEllipse::getAngleXU(void) const
-{
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(handle());
-
-    gp_Pnt center = this->myCurve->Axis().Location();
-    gp_Dir normal = this->myCurve->Axis().Direction();
-    gp_Dir xdir = this->myCurve->XAxis().Direction();
-
-
-    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
-
-    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
-
-}
-
-/*!
- * \brief GeomEllipse::setAngleXU complements getAngleXU.
- * \param angle
- */
-void GeomEllipse::setAngleXU(double angle)
-{
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(handle());
-
-    try {
-        gp_Pnt center = this->myCurve->Axis().Location();
-        gp_Dir normal = this->myCurve->Axis().Direction();
-
-        gp_Ax1 normaxis(center, normal);
-
-        gp_Ax2 xdirref(center, normal);
-
-        xdirref.Rotate(normaxis,angle);
-
-        this->myCurve->SetPosition(xdirref);
-
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1170,22 +1790,8 @@ void GeomEllipse::setMajorAxisDir(Base::Vector3d newdir)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
-}
-
-
-/*!
- * \brief GeomEllipse::isReversedInXY tests if an ellipse that lies in XY plane
- * is reversed (i.e. drawn from startpoint to endpoint in CW direction instead
- * of CCW.)
- * \return Returns True if the arc is CW and false if CCW.
- */
-bool GeomEllipse::isReversedInXY() const
-{
-    Handle_Geom_Ellipse c = myCurve;
-    assert(!c.IsNull());
-    return c->Axis().Direction().Z() < 0;
 }
 
 // Persistence implementer 
@@ -1266,7 +1872,7 @@ void GeomEllipse::Restore(Base::XMLReader& reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1282,7 +1888,7 @@ void GeomEllipse::setHandle(const Handle_Geom_Ellipse &e)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomArcOfEllipse,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomArcOfEllipse,Part::GeomArcOfConic)
 
 GeomArcOfEllipse::GeomArcOfEllipse()
 {
@@ -1320,57 +1926,11 @@ Geometry *GeomArcOfEllipse::clone(void) const
     return copy;
 }
 
-/*!
- * \brief GeomArcOfEllipse::getStartPoint
- * \param emulateCCWXY: if true, the arc will pretent to be a CCW arc in XY plane.
- * For this to work, the arc must lie in XY plane (i.e. Axis is either +Z or -Z).
- * \return XYZ of the arc's starting point.
- */
-Base::Vector3d GeomArcOfEllipse::getStartPoint(bool emulateCCWXY) const
+GeomBSplineCurve* GeomArcOfEllipse::toNurbs(double first, double last) const
 {
-    gp_Pnt pnt = this->myCurve->StartPoint();
-    if(emulateCCWXY)
-        if(isReversedInXY())
-            pnt = this->myCurve->EndPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-/*!
- * \brief GeomArcOfEllipse::getEndPoint
- * \param emulateCCWXY: if true, the arc will pretent to be a CCW arc in XY plane.
- * For this to work, the arc must lie in XY plane (i.e. Axis is either +Z or -Z).
- * \return XYZ of the arc's starting point.
- */
-Base::Vector3d GeomArcOfEllipse::getEndPoint(bool emulateCCWXY) const
-{
-    gp_Pnt pnt = this->myCurve->EndPoint();
-    if(emulateCCWXY)
-        if(isReversedInXY())
-            pnt = this->myCurve->StartPoint();
-
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-Base::Vector3d GeomArcOfEllipse::getCenter(void) const
-{
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(myCurve->BasisCurve());
-    gp_Ax1 axis = ellipse->Axis();
-    const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
-}
-
-void GeomArcOfEllipse::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(myCurve->BasisCurve());
-
-    try {
-        ellipse->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(curve->BasisCurve());
+    return GeomEllipse(ellipse).toNurbs(first, last);
 }
 
 double GeomArcOfEllipse::getMajorRadius(void) const
@@ -1388,7 +1948,7 @@ void GeomArcOfEllipse::setMajorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1407,57 +1967,7 @@ void GeomArcOfEllipse::setMinorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
-}
-
-/*!
- * \brief GeomArcOfEllipse::getAngleXU
- * \return The angle between ellipse's major axis (in direction to focus1) and
- * X axis of a default axis system in the plane of ellipse. The angle is
- * counted CCW as seen when looking at the ellipse so that ellipse's axis is
- * pointing at you. Note that this function may give unexpected results when
- * the ellipse is in XY, but reversed, because the X axis of the default axis
- * system is reversed compared to the global X axis. This angle, in conjunction
- * with ellipse's axis, fully defines the orientation of the ellipse.
- */
-double GeomArcOfEllipse::getAngleXU(void) const
-{
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(myCurve->BasisCurve());
-
-    gp_Pnt center = ellipse->Axis().Location();
-    gp_Dir normal = ellipse->Axis().Direction();
-    gp_Dir xdir = ellipse->XAxis().Direction();
-
-    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
-
-    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
-
-}
-
-/*!
- * \brief GeomArcOfEllipse::setAngleXU complements getAngleXU.
- */
-void GeomArcOfEllipse::setAngleXU(double angle)
-{
-    Handle_Geom_Ellipse ellipse = Handle_Geom_Ellipse::DownCast(myCurve->BasisCurve());
-
-    try {
-        gp_Pnt center = ellipse->Axis().Location();
-        gp_Dir normal = ellipse->Axis().Direction();
-
-        gp_Ax1 normaxis(center, normal);
-
-        gp_Ax2 xdirref(center, normal);
-
-        xdirref.Rotate(normaxis,angle);
-
-        ellipse->SetPosition(xdirref);
-
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1499,20 +2009,8 @@ void GeomArcOfEllipse::setMajorAxisDir(Base::Vector3d newdir)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
-}
-
-/*!
- * \brief GeomArcOfEllipse::isReversedInXY tests if an arc that lies in XY plane is reversed
- * (i.e. drawn from startpoint to endpoint in CW direction instead of CCW.)
- * \return Returns True if the arc is CW and false if CCW.
- */
-bool GeomArcOfEllipse::isReversedInXY() const
-{
-    Handle_Geom_Ellipse c = Handle_Geom_Ellipse::DownCast( myCurve->BasisCurve() );
-    assert(!c.IsNull());
-    return c->Axis().Direction().Z() < 0;
 }
 
 /*!
@@ -1526,8 +2024,8 @@ void GeomArcOfEllipse::getRange(double& u, double& v, bool emulateCCWXY) const
 {
     u = myCurve->FirstParameter();
     v = myCurve->LastParameter();
-    if(emulateCCWXY){
-        if(isReversedInXY()){
+    if (emulateCCWXY) {
+        if (isReversed()) {
             std::swap(u,v);
             u = -u; v = -v;
             if (v < u)
@@ -1548,8 +2046,8 @@ void GeomArcOfEllipse::getRange(double& u, double& v, bool emulateCCWXY) const
 void GeomArcOfEllipse::setRange(double u, double v, bool emulateCCWXY)
 {
     try {
-        if(emulateCCWXY){
-            if(isReversedInXY()){
+        if (emulateCCWXY) {
+            if (isReversed()) {
                 std::swap(u,v);
                 u = -u; v = -v;
             }
@@ -1558,7 +2056,7 @@ void GeomArcOfEllipse::setRange(double u, double v, bool emulateCCWXY)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1651,7 +2149,7 @@ void GeomArcOfEllipse::Restore(Base::XMLReader &reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1660,10 +2158,9 @@ PyObject *GeomArcOfEllipse::getPyObject(void)
     return new ArcOfEllipsePy(static_cast<GeomArcOfEllipse*>(this->clone()));
 }
 
-
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomHyperbola,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomHyperbola,Part::GeomConic)
 
 GeomHyperbola::GeomHyperbola()
 {
@@ -1692,26 +2189,9 @@ Geometry *GeomHyperbola::clone(void) const
     return newHyp;
 }
 
-Base::Vector3d GeomHyperbola::getCenter(void) const
+GeomBSplineCurve* GeomHyperbola::toNurbs(double first, double last) const
 {
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(handle());
-    gp_Ax1 axis = h->Axis();
-    const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
-}
-
-void GeomHyperbola::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(handle());
-
-    try {
-        h->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
+    return GeomCurve::toNurbs(first, last);
 }
 
 double GeomHyperbola::getMajorRadius(void) const
@@ -1729,7 +2209,7 @@ void GeomHyperbola::setMajorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1748,39 +2228,7 @@ void GeomHyperbola::setMinorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
-}
-
-double GeomHyperbola::getAngleXU(void) const
-{   
-    gp_Pnt center = this->myCurve->Axis().Location();
-    gp_Dir normal = this->myCurve->Axis().Direction();
-    gp_Dir xdir = this->myCurve->XAxis().Direction(); 
-    
-    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
-    
-    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
-}
-
-void GeomHyperbola::setAngleXU(double angle)
-{
-    try {
-        gp_Pnt center = this->myCurve->Axis().Location();
-        gp_Dir normal = this->myCurve->Axis().Direction();
-        
-        gp_Ax1 normaxis(center, normal);
-        
-        gp_Ax2 xdirref(center, normal);
-        
-        xdirref.Rotate(normaxis,angle);
-        
-        this->myCurve->SetPosition(xdirref);
-
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1856,17 +2304,17 @@ void GeomHyperbola::Restore(Base::XMLReader& reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
 PyObject *GeomHyperbola::getPyObject(void)
 {
-    return new HyperbolaPy((GeomHyperbola*)this->clone());
+    return new HyperbolaPy(static_cast<GeomHyperbola*>(this->clone()));
 }
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomArcOfHyperbola,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomArcOfHyperbola,Part::GeomArcOfConic)
 
 GeomArcOfHyperbola::GeomArcOfHyperbola()
 {
@@ -1905,38 +2353,11 @@ Geometry *GeomArcOfHyperbola::clone(void) const
     return copy;
 }
 
-Base::Vector3d GeomArcOfHyperbola::getStartPoint() const
+GeomBSplineCurve* GeomArcOfHyperbola::toNurbs(double first, double last) const
 {
-    gp_Pnt pnt = this->myCurve->StartPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-Base::Vector3d GeomArcOfHyperbola::getEndPoint() const
-{
-    gp_Pnt pnt = this->myCurve->EndPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-Base::Vector3d GeomArcOfHyperbola::getCenter(void) const
-{
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
-    gp_Ax1 axis = h->Axis();
-    const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
-}
-
-void GeomArcOfHyperbola::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
-
-    try {
-        h->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Hyperbola hyperbola = Handle_Geom_Hyperbola::DownCast(curve->BasisCurve());
+    return GeomHyperbola(hyperbola).toNurbs(first, last);
 }
 
 double GeomArcOfHyperbola::getMajorRadius(void) const
@@ -1954,7 +2375,7 @@ void GeomArcOfHyperbola::setMajorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -1973,61 +2394,89 @@ void GeomArcOfHyperbola::setMinorRadius(double Radius)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
-double GeomArcOfHyperbola::getAngleXU(void) const
+/*!
+ * \brief GeomArcOfHyperbola::getMajorAxisDir
+ * \return the direction vector (unit-length) of major axis of the hyperbola. The
+ * direction also points to the first focus.
+ */
+Base::Vector3d GeomArcOfHyperbola::getMajorAxisDir() const
 {
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
-    
-    gp_Pnt center = h->Axis().Location();
-    gp_Dir normal = h->Axis().Direction();
-    gp_Dir xdir = h->XAxis().Direction();
-    
-    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
-    
-    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
-
+    Handle_Geom_Hyperbola c = Handle_Geom_Hyperbola::DownCast( myCurve->BasisCurve() );
+    assert(!c.IsNull());
+    gp_Dir xdir = c->XAxis().Direction();
+    return Base::Vector3d(xdir.X(), xdir.Y(), xdir.Z());
 }
 
-void GeomArcOfHyperbola::setAngleXU(double angle)
+/*!
+ * \brief GeomArcOfHyperbola::setMajorAxisDir Rotates the hyperbola in its plane, so
+ * that its major axis is as close as possible to the provided direction.
+ * \param newdir [in] is the new direction. If the vector is small, the
+ * orientation of the ellipse will be preserved. If the vector is not small,
+ * but its projection onto plane of the ellipse is small, an exception will be
+ * thrown.
+ */
+void GeomArcOfHyperbola::setMajorAxisDir(Base::Vector3d newdir)
 {
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
-
+    Handle_Geom_Hyperbola c = Handle_Geom_Hyperbola::DownCast( myCurve->BasisCurve() );
+    assert(!c.IsNull());
+    #if OCC_VERSION_HEX >= 0x060504
+    if (newdir.Sqr() < Precision::SquareConfusion())
+    #else
+    if (newdir.Length() < Precision::Confusion())
+    #endif
+        return;//zero vector was passed. Keep the old orientation.
+    
     try {
-        gp_Pnt center = h->Axis().Location();
-        gp_Dir normal = h->Axis().Direction();
-        
-        gp_Ax1 normaxis(center, normal);
-        
-        gp_Ax2 xdirref(center, normal);
-        
-        xdirref.Rotate(normaxis,angle);
-        
-        h->SetPosition(xdirref);
-
+        gp_Ax2 pos = c->Position();
+        pos.SetXDirection(gp_Dir(newdir.x, newdir.y, newdir.z));//OCC should keep the old main Direction (Z), and change YDirection to accomodate the new XDirection.
+        c->SetPosition(pos);
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
-void GeomArcOfHyperbola::getRange(double& u, double& v) const
+void GeomArcOfHyperbola::getRange(double& u, double& v, bool emulateCCWXY) const
 {
+    try {
+        if (emulateCCWXY){
+            if (isReversed()) {
+                Handle_Geom_Hyperbola c = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
+                assert(!c.IsNull());
+                c->Reverse();
+            }
+        }
+    }
+    catch (Standard_Failure) {
+        Handle_Standard_Failure e = Standard_Failure::Caught();
+        throw Base::RuntimeError(e->GetMessageString());
+    }
+
     u = myCurve->FirstParameter();
     v = myCurve->LastParameter();
 }
 
-void GeomArcOfHyperbola::setRange(double u, double v)
+void GeomArcOfHyperbola::setRange(double u, double v, bool emulateCCWXY)
 {
     try {
         myCurve->SetTrim(u, v);
+
+        if (emulateCCWXY) {
+            if (isReversed()) {
+                Handle_Geom_Hyperbola c = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
+                assert(!c.IsNull());
+                c->Reverse();
+            }
+        }
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -2119,7 +2568,7 @@ void GeomArcOfHyperbola::Restore(Base::XMLReader &reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -2129,7 +2578,7 @@ PyObject *GeomArcOfHyperbola::getPyObject(void)
 }
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomParabola,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomParabola,Part::GeomConic)
 
 GeomParabola::GeomParabola()
 {
@@ -2158,26 +2607,11 @@ Geometry *GeomParabola::clone(void) const
     return newPar;
 }
 
-Base::Vector3d GeomParabola::getCenter(void) const
+GeomBSplineCurve* GeomParabola::toNurbs(double first, double last) const
 {
-    Handle_Geom_Parabola p = Handle_Geom_Parabola::DownCast(handle());
-    gp_Ax1 axis = p->Axis();
-    const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
-}
-
-void GeomParabola::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Parabola p = Handle_Geom_Parabola::DownCast(handle());
-
-    try {
-        p->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
+    // the default implementation suffices because a non-rational B-spline with
+    // one segment is a parabola
+    return GeomCurve::toNurbs(first, last);
 }
 
 double GeomParabola::getFocal(void) const
@@ -2195,38 +2629,7 @@ void GeomParabola::setFocal(double length)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
-}
-
-double GeomParabola::getAngleXU(void) const
-{   
-    gp_Pnt center = this->myCurve->Axis().Location();
-    gp_Dir normal = this->myCurve->Axis().Direction();
-    gp_Dir xdir = this->myCurve->XAxis().Direction(); 
-    
-    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
-    
-    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
-}
-
-void GeomParabola::setAngleXU(double angle)
-{
-    try {
-        gp_Pnt center = this->myCurve->Axis().Location();
-        gp_Dir normal = this->myCurve->Axis().Direction();
-        
-        gp_Ax1 normaxis(center, normal);
-        
-        gp_Ax2 xdirref(center, normal);
-        
-        xdirref.Rotate(normaxis,angle);
-        
-        this->myCurve->SetPosition(xdirref);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -2300,17 +2703,18 @@ void GeomParabola::Restore(Base::XMLReader& reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
+
 PyObject *GeomParabola::getPyObject(void)
 {
-    return new ParabolaPy((GeomParabola*)this->clone());
+    return new ParabolaPy(static_cast<GeomParabola*>(this->clone()));
 }
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomArcOfParabola,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomArcOfParabola,Part::GeomArcOfConic)
 
 GeomArcOfParabola::GeomArcOfParabola()
 {
@@ -2348,38 +2752,11 @@ Geometry *GeomArcOfParabola::clone(void) const
     return copy;
 }
 
-Base::Vector3d GeomArcOfParabola::getStartPoint() const
+GeomBSplineCurve* GeomArcOfParabola::toNurbs(double first, double last) const
 {
-    gp_Pnt pnt = this->myCurve->StartPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-Base::Vector3d GeomArcOfParabola::getEndPoint() const
-{
-    gp_Pnt pnt = this->myCurve->EndPoint();
-    return Base::Vector3d(pnt.X(), pnt.Y(), pnt.Z());
-}
-
-Base::Vector3d GeomArcOfParabola::getCenter(void) const
-{
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
-    gp_Ax1 axis = h->Axis();
-    const gp_Pnt& loc = axis.Location();
-    return Base::Vector3d(loc.X(),loc.Y(),loc.Z());
-}
-
-void GeomArcOfParabola::setCenter(const Base::Vector3d& Center)
-{
-    gp_Pnt p1(Center.x,Center.y,Center.z);
-    Handle_Geom_Hyperbola h = Handle_Geom_Hyperbola::DownCast(myCurve->BasisCurve());
-
-    try {
-        h->SetLocation(p1);
-    }
-    catch (Standard_Failure) {
-        Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
-    }
+    Handle_Geom_TrimmedCurve curve =  Handle_Geom_TrimmedCurve::DownCast(handle());
+    Handle_Geom_Parabola parabola = Handle_Geom_Parabola::DownCast(curve->BasisCurve());
+    return GeomParabola(parabola).toNurbs(first, last);
 }
 
 double GeomArcOfParabola::getFocal(void) const
@@ -2397,61 +2774,53 @@ void GeomArcOfParabola::setFocal(double length)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
-double GeomArcOfParabola::getAngleXU(void) const
+Base::Vector3d GeomArcOfParabola::getFocus(void) const
 {
     Handle_Geom_Parabola p = Handle_Geom_Parabola::DownCast(myCurve->BasisCurve());
+    gp_Pnt gp = p->Focus();
     
-    gp_Pnt center = p->Axis().Location();
-    gp_Dir normal = p->Axis().Direction();
-    gp_Dir xdir = p->XAxis().Direction();
-    
-    gp_Ax2 xdirref(center, normal); // this is a reference system, might be CCW or CW depending on the creation method
-    
-    return -xdir.AngleWithRef(xdirref.XDirection(),normal);
-
+    return Base::Vector3d(gp.X(),gp.Y(),gp.Z());
 }
 
-void GeomArcOfParabola::setAngleXU(double angle)
+void GeomArcOfParabola::getRange(double& u, double& v, bool emulateCCWXY) const
 {
-    Handle_Geom_Parabola p = Handle_Geom_Parabola::DownCast(myCurve->BasisCurve());
-
     try {
-        gp_Pnt center = p->Axis().Location();
-        gp_Dir normal = p->Axis().Direction();
-        
-        gp_Ax1 normaxis(center, normal);
-        
-        gp_Ax2 xdirref(center, normal);
-        
-        xdirref.Rotate(normaxis,angle);
-        
-        p->SetPosition(xdirref);
-
+        if (emulateCCWXY) {
+            if (isReversed()) {
+                Handle_Geom_Parabola c = Handle_Geom_Parabola::DownCast(myCurve->BasisCurve());
+                assert(!c.IsNull());
+                c->Reverse();
+            }
+        }
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
-}
 
-void GeomArcOfParabola::getRange(double& u, double& v) const
-{
     u = myCurve->FirstParameter();
     v = myCurve->LastParameter();
 }
 
-void GeomArcOfParabola::setRange(double u, double v)
+void GeomArcOfParabola::setRange(double u, double v, bool emulateCCWXY)
 {
     try {
         myCurve->SetTrim(u, v);
+        if (emulateCCWXY) {
+            if (isReversed()) {
+                Handle_Geom_Parabola c = Handle_Geom_Parabola::DownCast(myCurve->BasisCurve());
+                assert(!c.IsNull());
+                c->Reverse();
+            }
+        }
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -2499,7 +2868,7 @@ void GeomArcOfParabola::Restore(Base::XMLReader &reader)
 
     double CenterX,CenterY,CenterZ,NormalX,NormalY,NormalZ,Focal,AngleXU,StartAngle,EndAngle;
     // read my Element
-    reader.readElement("ArcOfHyperbola");
+    reader.readElement("ArcOfParabola");
     // get the value of my Attribute
     CenterX = reader.getAttributeAsFloat("CenterX");
     CenterY = reader.getAttributeAsFloat("CenterY");
@@ -2541,7 +2910,7 @@ void GeomArcOfParabola::Restore(Base::XMLReader &reader)
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -2552,7 +2921,7 @@ PyObject *GeomArcOfParabola::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomLine,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomLine,Part::GeomCurve)
 
 GeomLine::GeomLine()
 {
@@ -2657,7 +3026,7 @@ PyObject *GeomLine::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomLineSegment,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomLineSegment,Part::GeomCurve)
 
 GeomLineSegment::GeomLineSegment()
 {
@@ -2731,7 +3100,7 @@ void GeomLineSegment::setPoints(const Base::Vector3d& Start, const Base::Vector3
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
-        throw Base::Exception(e->GetMessageString());
+        throw Base::RuntimeError(e->GetMessageString());
     }
 }
 
@@ -2783,12 +3152,12 @@ void GeomLineSegment::Restore    (Base::XMLReader &reader)
 
 PyObject *GeomLineSegment::getPyObject(void)
 {
-    return new LinePy((GeomLineSegment*)this->clone());
+    return new LineSegmentPy(static_cast<GeomLineSegment*>(this->clone()));
 }
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomOffsetCurve,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomOffsetCurve,Part::GeomCurve)
 
 GeomOffsetCurve::GeomOffsetCurve()
 {
@@ -2837,7 +3206,7 @@ PyObject *GeomOffsetCurve::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomTrimmedCurve,Part::GeomCurve);
+TYPESYSTEM_SOURCE(Part::GeomTrimmedCurve,Part::GeomCurve)
 
 GeomTrimmedCurve::GeomTrimmedCurve()
 {
@@ -2881,7 +3250,7 @@ PyObject *GeomTrimmedCurve::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomSurface,Part::Geometry);
+TYPESYSTEM_SOURCE_ABSTRACT(Part::GeomSurface,Part::Geometry)
 
 GeomSurface::GeomSurface()
 {
@@ -2930,7 +3299,7 @@ bool GeomSurface::tangentV(double u, double v, gp_Dir& dirV) const
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomBezierSurface,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomBezierSurface,Part::GeomSurface)
 
 GeomBezierSurface::GeomBezierSurface()
 {
@@ -2975,7 +3344,7 @@ PyObject *GeomBezierSurface::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomBSplineSurface,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomBSplineSurface,Part::GeomSurface)
 
 GeomBSplineSurface::GeomBSplineSurface()
 {
@@ -3034,7 +3403,7 @@ PyObject *GeomBSplineSurface::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomCylinder,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomCylinder,Part::GeomSurface)
 
 GeomCylinder::GeomCylinder()
 {
@@ -3042,8 +3411,18 @@ GeomCylinder::GeomCylinder()
     this->mySurface = s;
 }
 
+GeomCylinder::GeomCylinder(const Handle_Geom_CylindricalSurface& c)
+{
+    this->mySurface = Handle_Geom_CylindricalSurface::DownCast(c->Copy());
+}
+
 GeomCylinder::~GeomCylinder()
 {
+}
+
+void GeomCylinder::setHandle(const Handle_Geom_CylindricalSurface& s)
+{
+    mySurface = Handle_Geom_CylindricalSurface::DownCast(s->Copy());
 }
 
 const Handle_Geom_Geometry& GeomCylinder::handle() const
@@ -3071,7 +3450,7 @@ PyObject *GeomCylinder::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomCone,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomCone,Part::GeomSurface)
 
 GeomCone::GeomCone()
 {
@@ -3079,8 +3458,18 @@ GeomCone::GeomCone()
     this->mySurface = s;
 }
 
+GeomCone::GeomCone(const Handle_Geom_ConicalSurface& c)
+{
+    this->mySurface = Handle_Geom_ConicalSurface::DownCast(c->Copy());
+}
+
 GeomCone::~GeomCone()
 {
+}
+
+void GeomCone::setHandle(const Handle_Geom_ConicalSurface& s)
+{
+    mySurface = Handle_Geom_ConicalSurface::DownCast(s->Copy());
 }
 
 const Handle_Geom_Geometry& GeomCone::handle() const
@@ -3108,7 +3497,7 @@ PyObject *GeomCone::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomToroid,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomToroid,Part::GeomSurface)
 
 GeomToroid::GeomToroid()
 {
@@ -3116,8 +3505,18 @@ GeomToroid::GeomToroid()
     this->mySurface = s;
 }
 
+GeomToroid::GeomToroid(const Handle_Geom_ToroidalSurface& t)
+{
+    this->mySurface = Handle_Geom_ToroidalSurface::DownCast(t->Copy());
+}
+
 GeomToroid::~GeomToroid()
 {
+}
+
+void GeomToroid::setHandle(const Handle_Geom_ToroidalSurface& s)
+{
+    mySurface = Handle_Geom_ToroidalSurface::DownCast(s->Copy());
 }
 
 const Handle_Geom_Geometry& GeomToroid::handle() const
@@ -3145,7 +3544,7 @@ PyObject *GeomToroid::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomSphere,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomSphere,Part::GeomSurface)
 
 GeomSphere::GeomSphere()
 {
@@ -3153,8 +3552,18 @@ GeomSphere::GeomSphere()
     this->mySurface = s;
 }
 
+GeomSphere::GeomSphere(const Handle_Geom_SphericalSurface& s)
+{
+    this->mySurface = Handle_Geom_SphericalSurface::DownCast(s->Copy());
+}
+
 GeomSphere::~GeomSphere()
 {
+}
+
+void GeomSphere::setHandle(const Handle_Geom_SphericalSurface& s)
+{
+    mySurface = Handle_Geom_SphericalSurface::DownCast(s->Copy());
 }
 
 const Handle_Geom_Geometry& GeomSphere::handle() const
@@ -3182,7 +3591,7 @@ PyObject *GeomSphere::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomPlane,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomPlane,Part::GeomSurface)
 
 GeomPlane::GeomPlane()
 {
@@ -3190,8 +3599,18 @@ GeomPlane::GeomPlane()
     this->mySurface = s;
 }
 
+GeomPlane::GeomPlane(const Handle_Geom_Plane& p)
+{
+    this->mySurface = Handle_Geom_Plane::DownCast(p->Copy());
+}
+
 GeomPlane::~GeomPlane()
 {
+}
+
+void GeomPlane::setHandle(const Handle_Geom_Plane& s)
+{
+    mySurface = Handle_Geom_Plane::DownCast(s->Copy());
 }
 
 const Handle_Geom_Geometry& GeomPlane::handle() const
@@ -3219,7 +3638,7 @@ PyObject *GeomPlane::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomOffsetSurface,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomOffsetSurface,Part::GeomSurface)
 
 GeomOffsetSurface::GeomOffsetSurface()
 {
@@ -3268,7 +3687,7 @@ PyObject *GeomOffsetSurface::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomPlateSurface,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomPlateSurface,Part::GeomSurface)
 
 GeomPlateSurface::GeomPlateSurface()
 {
@@ -3334,7 +3753,7 @@ PyObject *GeomPlateSurface::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomTrimmedSurface,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomTrimmedSurface,Part::GeomSurface)
 
 GeomTrimmedSurface::GeomTrimmedSurface()
 {
@@ -3378,7 +3797,7 @@ PyObject *GeomTrimmedSurface::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomSurfaceOfRevolution,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomSurfaceOfRevolution,Part::GeomSurface)
 
 GeomSurfaceOfRevolution::GeomSurfaceOfRevolution()
 {
@@ -3427,7 +3846,7 @@ PyObject *GeomSurfaceOfRevolution::getPyObject(void)
 
 // -------------------------------------------------
 
-TYPESYSTEM_SOURCE(Part::GeomSurfaceOfExtrusion,Part::GeomSurface);
+TYPESYSTEM_SOURCE(Part::GeomSurfaceOfExtrusion,Part::GeomSurface)
 
 GeomSurfaceOfExtrusion::GeomSurfaceOfExtrusion()
 {
@@ -3644,6 +4063,62 @@ GeomArcOfCircle *createFilletGeometry(const GeomLineSegment *lineSeg1, const Geo
     arc->setRange(startAngle, endAngle, /*emulateCCWXY=*/true);
 
     return arc;
+}
+
+GeomSurface* makeFromSurface(const Handle_Geom_Surface& s)
+{
+    if (s->IsKind(STANDARD_TYPE(Geom_ToroidalSurface))) {
+        Handle_Geom_ToroidalSurface hSurf = Handle_Geom_ToroidalSurface::DownCast(s);
+        return new GeomToroid(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_BezierSurface))) {
+        Handle_Geom_BezierSurface hSurf = Handle_Geom_BezierSurface::DownCast(s);
+        return new GeomBezierSurface(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_BSplineSurface))) {
+        Handle_Geom_BSplineSurface hSurf = Handle_Geom_BSplineSurface::DownCast(s);
+        return new GeomBSplineSurface(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_CylindricalSurface))) {
+        Handle_Geom_CylindricalSurface hSurf = Handle_Geom_CylindricalSurface::DownCast(s);
+        return new GeomCylinder(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_ConicalSurface))) {
+        Handle_Geom_ConicalSurface hSurf = Handle_Geom_ConicalSurface::DownCast(s);
+        return new GeomCone(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_SphericalSurface))) {
+        Handle_Geom_SphericalSurface hSurf = Handle_Geom_SphericalSurface::DownCast(s);
+        return new GeomSphere(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_Plane))) {
+        Handle_Geom_Plane hSurf = Handle_Geom_Plane::DownCast(s);
+        return new GeomPlane(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_OffsetSurface))) {
+        Handle_Geom_OffsetSurface hSurf = Handle_Geom_OffsetSurface::DownCast(s);
+        return new GeomOffsetSurface(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(GeomPlate_Surface))) {
+        Handle_GeomPlate_Surface hSurf = Handle_GeomPlate_Surface::DownCast(s);
+        return new GeomPlateSurface(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_RectangularTrimmedSurface))) {
+        Handle_Geom_RectangularTrimmedSurface hSurf = Handle_Geom_RectangularTrimmedSurface::DownCast(s);
+        return new GeomTrimmedSurface(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_SurfaceOfRevolution))) {
+        Handle_Geom_SurfaceOfRevolution hSurf = Handle_Geom_SurfaceOfRevolution::DownCast(s);
+        return new GeomSurfaceOfRevolution(hSurf);
+    }
+    else if (s->IsKind(STANDARD_TYPE(Geom_SurfaceOfLinearExtrusion))) {
+        Handle_Geom_SurfaceOfLinearExtrusion hSurf = Handle_Geom_SurfaceOfLinearExtrusion::DownCast(s);
+        return new GeomSurfaceOfExtrusion(hSurf);
+    }
+
+    std::string err = "Unhandled surface type ";
+    err += s->DynamicType()->Name();
+    throw Base::TypeError(err);
 }
 
 }

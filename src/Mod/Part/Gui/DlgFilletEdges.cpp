@@ -76,8 +76,6 @@
 
 using namespace PartGui;
 
-Q_DECLARE_METATYPE(Base::Quantity)
-
 FilletRadiusDelegate::FilletRadiusDelegate(QObject *parent) : QItemDelegate(parent)
 {
 }
@@ -184,7 +182,7 @@ namespace PartGui {
         {
             allowEdge = false;
         }
-        bool allow(App::Document*pDoc, App::DocumentObject*pObj, const char*sSubName)
+        bool allow(App::Document* /*pDoc*/, App::DocumentObject*pObj, const char*sSubName)
         {
             if (pObj != this->object)
                 return false;
@@ -282,9 +280,15 @@ DlgFilletEdges::DlgFilletEdges(FilletType type, Part::FilletBase* fillet, QWidge
     ui->treeView->setModel(model);
 
     QHeaderView* header = ui->treeView->header();
+#if QT_VERSION >= 0x050000
+    header->setSectionResizeMode(0, QHeaderView::Stretch);
+    header->setDefaultAlignment(Qt::AlignLeft);
+    header->setSectionsMovable(false);
+#else
     header->setResizeMode(0, QHeaderView::Stretch);
     header->setDefaultAlignment(Qt::AlignLeft);
     header->setMovable(false);
+#endif
     on_filletType_activated(0);
     findShapes();
 }
@@ -936,7 +940,7 @@ bool DlgFilletEdges::accept()
         "del __fillets__\n"
         "FreeCADGui.ActiveDocument.%2.Visibility = False\n")
         .arg(name).arg(shape);
-    Gui::Application::Instance->runPythonCode((const char*)code.toLatin1());
+    Gui::Command::runCommand(Gui::Command::App, code.toLatin1());
     activeDoc->commitTransaction();
     activeDoc->recompute();
     if (d->fillet) {

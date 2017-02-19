@@ -105,6 +105,7 @@ void MDIView::deleteSelf()
 
 void MDIView::setOverrideCursor(const QCursor& c)
 {
+    Q_UNUSED(c);
 }
 
 void  MDIView::restoreOverrideCursor()
@@ -144,11 +145,14 @@ void MDIView::viewAll()
 /// receive a message
 bool MDIView::onMsg(const char* pMsg,const char** ppReturn)
 {
+    Q_UNUSED(pMsg);
+    Q_UNUSED(ppReturn);
     return false;
 }
 
 bool MDIView::onHasMsg(const char* pMsg) const
 {
+    Q_UNUSED(pMsg);
     return false;
 }
 
@@ -174,7 +178,7 @@ void MDIView::closeEvent(QCloseEvent *e)
         }
 
         // Note: When using QMdiArea we must not use removeWindow()
-        // because otherwise the QMdiSubWindow will loose its parent
+        // because otherwise the QMdiSubWindow will lose its parent
         // and thus the notification in QMdiSubWindow::closeEvent of
         // other mdi windows to get maximized if this window
         // is maximized will fail.
@@ -193,6 +197,7 @@ void MDIView::windowStateChanged( MDIView* )
 
 void MDIView::print(QPrinter* printer)
 {
+    Q_UNUSED(printer);
     std::cerr << "Printing not implemented for " << this->metaObject()->className() << std::endl;
 }
 

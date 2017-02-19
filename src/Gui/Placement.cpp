@@ -30,6 +30,7 @@
 #include "ui_Placement.h"
 #include <Gui/DockWindowManager.h>
 #include <Gui/Application.h>
+#include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/Selection.h>
 #include <Gui/ViewProvider.h>
@@ -218,19 +219,21 @@ void Placement::applyPlacement(const QString& data, bool incremental)
                 QString cmd;
                 if (incremental)
                     cmd = QString::fromLatin1(
-                        "App.getDocument(\"%1\").%2.Placement=%3.multiply(App.getDocument(\"%1\").%2.Placement)")
+                        "App.getDocument(\"%1\").%2.%3=%4.multiply(App.getDocument(\"%1\").%2.%3)")
                         .arg(QLatin1String((*it)->getDocument()->getName()))
                         .arg(QLatin1String((*it)->getNameInDocument()))
+                        .arg(QLatin1String(this->propertyName.c_str()))
                         .arg(data);
                 else {
                     cmd = QString::fromLatin1(
-                        "App.getDocument(\"%1\").%2.Placement=%3")
+                        "App.getDocument(\"%1\").%2.%3=%4")
                         .arg(QLatin1String((*it)->getDocument()->getName()))
                         .arg(QLatin1String((*it)->getNameInDocument()))
+                        .arg(QLatin1String(this->propertyName.c_str()))
                         .arg(data);
                 }
 
-                Application::Instance->runPythonCode((const char*)cmd.toLatin1());
+                Gui::Command::runCommand(Gui::Command::App, cmd.toLatin1());
             }
         }
 

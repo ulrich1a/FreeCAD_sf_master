@@ -90,7 +90,7 @@ std::string PropertyFileIncluded::getDocTransientPath(void) const
     std::string path;
     PropertyContainer *co = getContainer();
     if (co->isDerivedFrom(DocumentObject::getClassTypeId())) {
-        path = dynamic_cast<DocumentObject*>(co)->getDocument()->TransientDir.getValue();
+        path = static_cast<DocumentObject*>(co)->getDocument()->TransientDir.getValue();
         std::replace(path.begin(), path.end(), '\\', '/');
     }
     return path;
@@ -153,7 +153,7 @@ void PropertyFileIncluded::setValue(const char* sFile, const char* sName)
                 // if a file with this name already exists search for a new one
                 std::string dir = pathTrans;
                 std::string fnp = fi.fileNamePure();
-                std::string ext = fi.extension(false);
+                std::string ext = fi.extension();
                 int i=0;
                 do {
                     i++;
@@ -182,7 +182,7 @@ void PropertyFileIncluded::setValue(const char* sFile, const char* sName)
         // directory:
         // When a file is read-only it is supposed to be assigned to a
         // PropertyFileIncluded instance. In this case we must copy the
-        // file because otherwise the above instance looses its data.
+        // file because otherwise the above instance loses its data.
         // If the file is writable it is supposed to be of free use and
         // it can be simply renamed.
 
@@ -207,7 +207,7 @@ void PropertyFileIncluded::setValue(const char* sFile, const char* sName)
                 // if a file with this name already exists search for a new one
                 std::string dir = fi.dirPath();
                 std::string fnp = fi.fileNamePure();
-                std::string ext = fi.extension(false);
+                std::string ext = fi.extension();
                 int i=0;
                 do {
                     i++;

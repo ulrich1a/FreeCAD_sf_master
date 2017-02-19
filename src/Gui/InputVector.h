@@ -127,11 +127,10 @@ public:
 
         if (this->direction->count() == 0) {
             this->direction->insertItems(0, QStringList()
-             << QApplication::translate("Gui::LocationDialog", "X", 0, QApplication::UnicodeUTF8)
-             << QApplication::translate("Gui::LocationDialog", "Y", 0, QApplication::UnicodeUTF8)
-             << QApplication::translate("Gui::LocationDialog", "Z", 0, QApplication::UnicodeUTF8)
-             << QApplication::translate("Gui::LocationDialog", "User defined...", 0, 
-                QApplication::UnicodeUTF8)
+             << QApplication::translate("Gui::LocationDialog", "X")
+             << QApplication::translate("Gui::LocationDialog", "Y")
+             << QApplication::translate("Gui::LocationDialog", "Z")
+             << QApplication::translate("Gui::LocationDialog", "User defined...")
             );
 
             this->direction->setCurrentIndex(2);
@@ -142,15 +141,11 @@ public:
             this->direction->setItemData(2, QVariant::fromValue<Base::Vector3d>(Base::Vector3d(0,0,1)));
         }
         else {
-            this->direction->setItemText(0, QApplication::translate("Gui::LocationDialog", "X", 0,
-                QApplication::UnicodeUTF8));
-            this->direction->setItemText(1, QApplication::translate("Gui::LocationDialog", "Y", 0,
-                QApplication::UnicodeUTF8));
-            this->direction->setItemText(2, QApplication::translate("Gui::LocationDialog", "Z", 0,
-                QApplication::UnicodeUTF8));
+            this->direction->setItemText(0, QApplication::translate("Gui::LocationDialog", "X"));
+            this->direction->setItemText(1, QApplication::translate("Gui::LocationDialog", "Y"));
+            this->direction->setItemText(2, QApplication::translate("Gui::LocationDialog", "Z"));
             this->direction->setItemText(this->direction->count()-1,
-                QApplication::translate("Gui::LocationDialog", "User defined...", 0,
-                QApplication::UnicodeUTF8));
+                QApplication::translate("Gui::LocationDialog", "User defined..."));
         }
     }
 
@@ -191,7 +186,7 @@ private:
             bool ok;
             Base::Vector3d dir = this->getUserDirection(&ok);
             if (ok) {
-                if (dir.Length() < FLT_EPSILON) {
+                if (dir.Length() < Base::Vector3d::epsilon()) {
                     QMessageBox::critical(this, LocationDialog::tr("Wrong direction"),
                         LocationDialog::tr("Direction must not be the null vector"));
                     return;
@@ -249,11 +244,10 @@ public:
 
         if (this->direction->count() == 0) {
             this->direction->insertItems(0, QStringList()
-             << QApplication::translate("Gui::LocationDialog", "X", 0, QApplication::UnicodeUTF8)
-             << QApplication::translate("Gui::LocationDialog", "Y", 0, QApplication::UnicodeUTF8)
-             << QApplication::translate("Gui::LocationDialog", "Z", 0, QApplication::UnicodeUTF8)
-             << QApplication::translate("Gui::LocationDialog", "User defined...", 0, 
-                QApplication::UnicodeUTF8)
+             << QApplication::translate("Gui::LocationDialog", "X")
+             << QApplication::translate("Gui::LocationDialog", "Y")
+             << QApplication::translate("Gui::LocationDialog", "Z")
+             << QApplication::translate("Gui::LocationDialog", "User defined...")
             );
 
             this->direction->setCurrentIndex(2);
@@ -264,15 +258,11 @@ public:
             this->direction->setItemData(2, QVariant::fromValue<Base::Vector3d>(Base::Vector3d(0,0,1)));
         }
         else {
-            this->direction->setItemText(0, QApplication::translate("Gui::LocationDialog", "X", 0,
-                QApplication::UnicodeUTF8));
-            this->direction->setItemText(1, QApplication::translate("Gui::LocationDialog", "Y", 0,
-                QApplication::UnicodeUTF8));
-            this->direction->setItemText(2, QApplication::translate("Gui::LocationDialog", "Z", 0,
-                QApplication::UnicodeUTF8));
+            this->direction->setItemText(0, QApplication::translate("Gui::LocationDialog", "X"));
+            this->direction->setItemText(1, QApplication::translate("Gui::LocationDialog", "Y"));
+            this->direction->setItemText(2, QApplication::translate("Gui::LocationDialog", "Z"));
             this->direction->setItemText(this->direction->count()-1,
-                QApplication::translate("Gui::LocationDialog", "User defined...", 0,
-                QApplication::UnicodeUTF8));
+                QApplication::translate("Gui::LocationDialog", "User defined..."));
         }
     }
 
@@ -304,7 +294,7 @@ public:
 public:
     void setDirection(const Base::Vector3d& dir)
     {
-        if (dir.Length() < FLT_EPSILON) {
+        if (dir.Length() < Base::Vector3d::epsilon()) {
             return;
         }
 
@@ -336,7 +326,7 @@ public:
             bool ok;
             Base::Vector3d dir = dlg->getUserDirection(&ok);
             if (ok) {
-                if (dir.Length() < FLT_EPSILON) {
+                if (dir.Length() < Base::Vector3d::epsilon()) {
                     QMessageBox::critical(dlg, LocationDialog::tr("Wrong direction"),
                         LocationDialog::tr("Direction must not be the null vector"));
                     return false;

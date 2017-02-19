@@ -50,6 +50,7 @@
 # include <QDesktopServices>
 # include <QMenu>
 # include <QDesktopWidget>
+# include <QSignalMapper>
 #endif
 
 #include "BrowserView.h"
@@ -57,7 +58,6 @@
 #include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/ProgressBar.h>
-#include <Gui/DownloadDialog.h>
 #include <Gui/Command.h>
 #include <Gui/OnlineDocumentation.h>
 #include <Gui/DownloadManager.h>
@@ -359,12 +359,14 @@ void BrowserView::onOpenLinkInNewWindow(const QUrl& url)
 
 void BrowserView::OnChange(Base::Subject<const char*> &rCaller,const char* rcReason)
 {
+    Q_UNUSED(rCaller);
+    Q_UNUSED(rcReason);
 }
 
 /**
  * Runs the action specified by \a pMsg.
  */
-bool BrowserView::onMsg(const char* pMsg,const char** ppReturn)
+bool BrowserView::onMsg(const char* pMsg,const char** )
 {
     if (strcmp(pMsg,"Back")==0){
         view->back();

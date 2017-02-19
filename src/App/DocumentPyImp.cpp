@@ -83,11 +83,14 @@ PyObject*  DocumentPy::save(PyObject * args)
 PyObject*  DocumentPy::saveAs(PyObject * args)
 {
     char* fn;
-    if (!PyArg_ParseTuple(args, "s", &fn))     // convert args: Python->C
-        return NULL;                    // NULL triggers exception
+    if (!PyArg_ParseTuple(args, "et", "utf-8", &fn))
+        return NULL;
+
+    std::string utf8Name = fn;
+    PyMem_Free(fn);
 
     try {
-        if (!getDocumentPtr()->saveAs(fn)) {
+        if (!getDocumentPtr()->saveAs(utf8Name.c_str())) {
             PyErr_SetString(PyExc_ValueError, "Object attribute 'FileName' is not set");
             return NULL;
         }
@@ -101,9 +104,9 @@ PyObject*  DocumentPy::saveAs(PyObject * args)
         return 0;
     }
 
-    Base::FileInfo fi(fn);
+    Base::FileInfo fi(utf8Name);
     if (!fi.isReadable()) {
-        PyErr_Format(PyExc_IOError, "No such file or directory: '%s'", fn);
+        PyErr_Format(PyExc_IOError, "No such file or directory: '%s'", utf8Name.c_str());
         return NULL;
     }
 
@@ -322,16 +325,16 @@ PyObject*  DocumentPy::openTransaction(PyObject *args)
     PyObject *value;
     if (!PyArg_ParseTuple(args, "|O",&value))
         return NULL;    // NULL triggers exception
-    char *pstr=0;
+    std::string cmd;
     if (PyUnicode_Check(value)) {
         PyObject* unicode = PyUnicode_AsLatin1String(value);
-        pstr = PyString_AsString(unicode);
+        cmd = PyString_AsString(unicode);
         Py_DECREF(unicode);
     }
     else if (PyString_Check(value)) {
-        pstr = PyString_AsString(value);
+        cmd = PyString_AsString(value);
     }
-    getDocumentPtr()->openTransaction(pstr); 
+    getDocumentPtr()->openTransaction(cmd.c_str());
     Py_Return; 
 }
 
@@ -381,8 +384,8 @@ PyObject*  DocumentPy::recompute(PyObject * args)
 {
     if (!PyArg_ParseTuple(args, ""))     // convert args: Python->C 
         return NULL;                    // NULL triggers exception 
-    getDocumentPtr()->recompute();
-    Py_Return;
+    int objectCount = getDocumentPtr()->recompute();
+    return Py::new_reference_to(Py::Int(objectCount));
 }
 
 PyObject*  DocumentPy::getObject(PyObject *args)
@@ -481,6 +484,30 @@ Py::List DocumentPy::getObjects(void) const
     Py::List res;
 
     for (std::vector<DocumentObject*>::const_iterator It = objs.begin();It != objs.end();++It)
+        //Note: Here we must force the Py::Object to own this Python object as getPyObject() increments the counter
+        res.append(Py::Object((*It)->getPyObject(), true));
+
+    return res;
+}
+
+Py::List DocumentPy::getToplogicalSortedObjects(void) const
+{
+    std::vector<DocumentObject*> objs = getDocumentPtr()->topologicalSort();
+    Py::List res;
+
+    for (std::vector<DocumentObject*>::const_iterator It = objs.begin(); It != objs.end(); ++It)
+        //Note: Here we must force the Py::Object to own this Python object as getPyObject() increments the counter
+        res.append(Py::Object((*It)->getPyObject(), true));
+
+    return res;
+}
+
+Py::List DocumentPy::getRootObjects(void) const
+{
+    std::vector<DocumentObject*> objs = getDocumentPtr()->getRootObjects();
+    Py::List res;
+
+    for (std::vector<DocumentObject*>::const_iterator It = objs.begin(); It != objs.end(); ++It)
         //Note: Here we must force the Py::Object to own this Python object as getPyObject() increments the counter
         res.append(Py::Object((*It)->getPyObject(), true));
 

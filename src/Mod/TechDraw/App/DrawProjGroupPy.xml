@@ -23,9 +23,19 @@
         <UserDocu>removeProjection(string projectionType) - Remove specified Projection Item from this Group. Returns int number of views in Group.</UserDocu>
       </Documentation>
     </Methode>
+    <Methode Name="purgeProjections">
+      <Documentation>
+        <UserDocu>purgeProjections() - Remove all Projection Items from this Group. Returns int number of views in Group (0).</UserDocu>
+      </Documentation>
+    </Methode>
     <Methode Name="getItemByLabel">
       <Documentation>
         <UserDocu>getItemByLabel(string projectionType) - return specified Projection Item</UserDocu>
+      </Documentation>
+    </Methode>
+    <Methode Name="setViewOrientation">
+      <Documentation>
+        <UserDocu>setViewOrientation(DrawProjGroupItem item, string projectionType) - sets item's view Direction according to projectionType</UserDocu>
       </Documentation>
     </Methode>
     <CustomAttributes />

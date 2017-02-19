@@ -20,9 +20,9 @@
 # *   USA                                                                   *
 # *                                                                         *
 # ***************************************************************************/
+from __future__ import print_function
 
-
-'''
+TOOLTIP='''
 Dumper is an extremely simple postprocessor file for the Path workbench. It is used
 to dump the command list from one or more Path objects for simple inspection. This post
 doesn't do any manipulation of the path and doesn't write anything to disk.  It just
@@ -39,7 +39,7 @@ if open.__module__ == '__builtin__':
     pythonopen = open
 
 
-def export(objectslist, filename):
+def export(objectslist, filename,argstring):
     output = '''(This ouput produced with the dump post processor)
 (Dump is useful for inspecting the raw commands in your paths)
 (but is not useful for driving machines.)
@@ -52,9 +52,9 @@ def export(objectslist, filename):
     for obj in objectslist:
 
         if not hasattr(obj, "Path"):
-            print "the object " + obj.Name + " is not a path. Please select only path and Compounds."
+            print("the object " + obj.Name + " is not a path. Please select only path and Compounds.")
             return
-        print "postprocessing..."
+        print("postprocessing...")
         output += parse(obj)
 
     if SHOW_EDITOR:
@@ -68,7 +68,8 @@ def export(objectslist, filename):
     else:
         final = output
 
-    print "done postprocessing."
+    print("done postprocessing.")
+    return final
 
 
 def parse(pathobj):
@@ -90,4 +91,4 @@ def parse(pathobj):
             out += str(c) + "\n"
         return out
 
-print __name__ + " gcode postprocessor loaded."
+print(__name__ + " gcode postprocessor loaded.")

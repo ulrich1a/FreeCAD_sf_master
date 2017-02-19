@@ -89,6 +89,7 @@ void AbstractSplitView::setupSettings()
     OnChange(*hGrp,"UseBackgroundColorMid");
     OnChange(*hGrp,"UseAntialiasing");
     OnChange(*hGrp,"ShowFPS");
+    OnChange(*hGrp,"UseVBO");
     OnChange(*hGrp,"Orthographic");
     OnChange(*hGrp,"HeadlightColor");
     OnChange(*hGrp,"HeadlightDirection");
@@ -227,6 +228,11 @@ void AbstractSplitView::OnChange(ParameterGrp::SubjectType &rCaller,ParameterGrp
         for (std::vector<View3DInventorViewer*>::iterator it = _viewer.begin(); it != _viewer.end(); ++it)
             (*it)->setEnabledFPSCounter(rGrp.GetBool("ShowFPS",false));
     }
+    else if (strcmp(Reason,"UseVBO") == 0) {
+        for (std::vector<View3DInventorViewer*>::iterator it = _viewer.begin(); it != _viewer.end(); ++it)
+            (*it)->setEnabledVBO(rGrp.GetBool("UseVBO",false));
+    }
+
     else if (strcmp(Reason,"Orthographic") == 0) {
         // check whether a perspective or orthogrphic camera should be set
         if (rGrp.GetBool("Orthographic", true)) {
@@ -268,7 +274,7 @@ const char *AbstractSplitView::getName(void) const
     return "SplitView3DInventor";
 }
 
-bool AbstractSplitView::onMsg(const char* pMsg, const char** ppReturn)
+bool AbstractSplitView::onMsg(const char* pMsg, const char**)
 {
     if (strcmp("ViewFit",pMsg) == 0 ) {
         for (std::vector<View3DInventorViewer*>::iterator it = _viewer.begin(); it != _viewer.end(); ++it)
@@ -369,6 +375,7 @@ bool AbstractSplitView::onHasMsg(const char* pMsg) const
 
 void AbstractSplitView::setOverrideCursor(const QCursor& aCursor)
 {
+    Q_UNUSED(aCursor); 
     //_viewer->getWidget()->setCursor(aCursor);
 }
 
@@ -634,8 +641,6 @@ Py::Object AbstractSplitViewPy::getViewer(const Py::Tuple& args)
     catch(...) {
         throw Py::Exception("Unknown C++ exception");
     }
-
-    return Py::None();
 }
 
 Py::Object AbstractSplitViewPy::sequence_item(ssize_t viewIndex)

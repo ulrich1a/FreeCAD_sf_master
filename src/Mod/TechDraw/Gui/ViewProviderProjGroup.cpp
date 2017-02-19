@@ -29,11 +29,8 @@
 # include <QMenu>
 #endif
 
-/// Here the FreeCAD includes sorted by Base,App,Gui......
 #include <Base/Console.h>
 #include <Base/Parameter.h>
-#include <Base/Exception.h>
-#include <Base/Sequencer.h>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -49,14 +46,15 @@
 #include <Gui/SoFCSelection.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
-#include <Mod/TechDraw/App/DrawProjGroup.h>
+#include <Mod/TechDraw/App/DrawProjGroupItem.h>
+
 
 #include "TaskProjGroup.h"
 #include "ViewProviderProjGroup.h"
 
 using namespace TechDrawGui;
 
-PROPERTY_SOURCE(TechDrawGui::ViewProviderProjGroup, Gui::ViewProviderDocumentObject)
+PROPERTY_SOURCE(TechDrawGui::ViewProviderProjGroup, TechDrawGui::ViewProviderDrawingView)
 
 //**************************************************************************
 // Construction/Destruction
@@ -109,15 +107,27 @@ void ViewProviderProjGroup::updateData(const App::Property* prop)
 
  }
 
+void ViewProviderProjGroup::onChanged(const App::Property *prop)
+{
+    if (prop == &(getViewObject()->Scale)) {
+            if (getViewObject()->ScaleType.isValue("Automatic")) {
+                    getMDIViewPage()->redraw1View(getViewObject());
+            }
+    } else if (prop == &(getViewObject()->ScaleType)) {
+        getMDIViewPage()->redraw1View(getViewObject());
+    }
+}
 
 void ViewProviderProjGroup::setupContextMenu(QMenu* menu, QObject* receiver, const char* member)
 {
-    //QAction* act;
-    //act = menu->addAction(QObject::tr("Show drawing"), receiver, member);
+    Q_UNUSED(menu);
+    Q_UNUSED(receiver);
+    Q_UNUSED(member);
 }
 
 bool ViewProviderProjGroup::setEdit(int ModNum)
 {
+    Q_UNUSED(ModNum);
     // When double-clicking on the item for this sketch the
     // object unsets and sets its edit mode without closing
     // the task panel
@@ -130,17 +140,25 @@ bool ViewProviderProjGroup::setEdit(int ModNum)
     Gui::Selection().clearSelection();
 
     // start the edit dialog
-    if (projDlg)
+    if (projDlg) {
+        projDlg->setCreateMode(false);
         Gui::Control().showDialog(projDlg);
-    else
-        Gui::Control().showDialog(new TaskDlgProjGroup(getObject()));
+    } else {
+        Gui::Control().showDialog(new TaskDlgProjGroup(getObject(),false));
+    }
 
     return true;
 }
 
 void ViewProviderProjGroup::unsetEdit(int ModNum)
 {
-    Gui::Control().closeDialog();
+    Q_UNUSED(ModNum);
+    if (ModNum == ViewProvider::Default) {
+        Gui::Control().closeDialog();
+    }
+    else {
+        ViewProviderDrawingView::unsetEdit(ModNum);
+    }
 }
 
 bool ViewProviderProjGroup::doubleClicked(void)
@@ -165,8 +183,12 @@ std::vector<App::DocumentObject*> ViewProviderProjGroup::claimChildren(void) con
     }
 }
 
+TechDraw::DrawProjGroup* ViewProviderProjGroup::getViewObject() const
+{
+    return dynamic_cast<TechDraw::DrawProjGroup*>(pcObject);
+}
 
 TechDraw::DrawProjGroup* ViewProviderProjGroup::getObject() const
 {
-    return dynamic_cast<TechDraw::DrawProjGroup*>(pcObject);
+    return getViewObject();
 }

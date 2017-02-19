@@ -61,22 +61,20 @@ using namespace PartDesignGui;
 
 const char* PartDesignGui::ViewProviderBody::BodyModeEnum[] = {"Through","Tip",NULL};
 
-PROPERTY_SOURCE(PartDesignGui::ViewProviderBody,PartGui::ViewProviderPart)
+PROPERTY_SOURCE_WITH_EXTENSIONS(PartDesignGui::ViewProviderBody,PartGui::ViewProviderPart)
 
 ViewProviderBody::ViewProviderBody()
 {
     ADD_PROPERTY(DisplayModeBody,((long)0));
     DisplayModeBody.setEnums(BodyModeEnum);
-    
-    pcBodyChildren = new SoSeparator();
-    pcBodyChildren->ref();
 
     sPixmap = "PartDesign_Body_Tree.svg";
+    
+    Gui::ViewProviderOriginGroupExtension::initExtension(this);
 }
 
 ViewProviderBody::~ViewProviderBody()
 {
-    pcBodyChildren->unref ();
     connectChangedObjectApp.disconnect();
     connectChangedObjectGui.disconnect();
 }
@@ -85,9 +83,9 @@ void ViewProviderBody::attach(App::DocumentObject *pcFeat)
 {
     // call parent attach method
     ViewProviderPart::attach(pcFeat);
-
-    addDisplayMaskMode(pcBodyChildren, "Through");
-    setDisplayMaskMode("Through");
+    
+    //set default display mode
+    onChanged(&DisplayModeBody);
 
     App::Document *adoc  = pcObject->getDocument ();
     Gui::Document *gdoc = Gui::Application::Instance->getDocument ( adoc ) ;
@@ -131,6 +129,8 @@ void ViewProviderBody::setOverrideMode(const std::string& mode) {
 
 void ViewProviderBody::setupContextMenu(QMenu* menu, QObject* receiver, const char* member)
 {
+    Q_UNUSED(receiver);
+    Q_UNUSED(member);
     Gui::ActionFunction* func = new Gui::ActionFunction(menu);
     QAction* act = menu->addAction(tr("Toggle active body"));
     func->trigger(act, boost::bind(&ViewProviderBody::doubleClicked, this));
@@ -181,7 +181,7 @@ bool ViewProviderBody::doubleClicked(void)
 std::vector<App::DocumentObject*> ViewProviderBody::claimChildren(void)const
 {
     PartDesign::Body* body= static_cast<PartDesign::Body*> ( getObject () );
-    const std::vector<App::DocumentObject*> &model = body->Model.getValues ();
+    const std::vector<App::DocumentObject*> &model = body->Group.getValues ();
     std::set<App::DocumentObject*> outSet; //< set of objects not to claim (childrens of childrens)
 
     // search for objects handled (claimed) by the features
@@ -215,25 +215,46 @@ std::vector<App::DocumentObject*> ViewProviderBody::claimChildren(void)const
 
 
 std::vector<App::DocumentObject*> ViewProviderBody::claimChildren3D(void)const
+
 {
+
     PartDesign::Body* body = static_cast<PartDesign::Body*>(getObject());
 
-    const std::vector<App::DocumentObject*> & features = body->Model.getValues();
+
+
+    const std::vector<App::DocumentObject*> & features = body->Group.getValues();
+
+
 
     std::vector<App::DocumentObject*> rv;
 
+
+
     if ( body->Origin.getValue() ) { // Add origin
+
         rv.push_back (body->Origin.getValue());
+
     }
+
     if ( body->BaseFeature.getValue() ) { // Add Base Feature
+
         rv.push_back (body->BaseFeature.getValue());
+
     }
+
+
 
     // Add all other stuff
+
     std::copy (features.begin(), features.end(), std::back_inserter (rv) );
 
+
+
     return rv;
+
 }
+
+
 
 // TODO To be deleted (2015-09-08, Fat-Zer)
 //void ViewProviderBody::updateTree()
@@ -246,7 +267,7 @@ std::vector<App::DocumentObject*> ViewProviderBody::claimChildren3D(void)const
 //    bool active = body->IsActive.getValue();
 //    //Base::Console().Error("Body is %s\n", active ? "active" : "inactive");
 //    ActiveGuiDoc->signalHighlightObject(*this, Gui::Blue, active);
-//    std::vector<App::DocumentObject*> features = body->Model.getValues();
+//    std::vector<App::DocumentObject*> features = body->Group.getValues();
 //    bool highlight = true;
 //    App::DocumentObject* tip = body->Tip.getValue();
 //    for (std::vector<App::DocumentObject*>::const_iterator f = features.begin(); f != features.end(); f++) {
@@ -262,7 +283,7 @@ std::vector<App::DocumentObject*> ViewProviderBody::claimChildren3D(void)const
 bool ViewProviderBody::onDelete ( const std::vector<std::string> &) {
     // TODO May be do it conditionally? (2015-09-05, Fat-Zer)
     Gui::Command::doCommand(Gui::Command::Doc,
-            "App.getDocument(\"%s\").getObject(\"%s\").removeModelFromDocument()"
+            "App.getDocument(\"%s\").getObject(\"%s\").removeObjectsFromDocument()"
             ,getObject()->getDocument()->getName(), getObject()->getNameInDocument());
     return true;
 }
@@ -271,7 +292,7 @@ void ViewProviderBody::updateData(const App::Property* prop)
 {
     PartDesign::Body* body = static_cast<PartDesign::Body*>(getObject());
 
-    if (prop == &body->Model || prop == &body->BaseFeature) {
+    if (prop == &body->Group || prop == &body->BaseFeature) {
         // update sizes of origins and datums
         updateOriginDatumSize ();
         //ensure all model features are in visual body mode
@@ -296,7 +317,7 @@ void ViewProviderBody::slotChangedObjectApp ( const App::DocumentObject& obj, co
     }
 
     PartDesign::Body *body = static_cast<PartDesign::Body*> ( getObject() );
-    if ( body && body->hasFeature (&obj ) ) {
+    if ( body && body->hasObject (&obj ) ) {
         updateOriginDatumSize ();
     }
 }
@@ -318,7 +339,7 @@ void ViewProviderBody::slotChangedObjectGui (
     PartDesign::Body *body = static_cast<PartDesign::Body*> ( getObject() );
     App::DocumentObject *obj = vp.getObject ();
 
-    if ( body && obj && body->hasFeature ( obj ) ) {
+    if ( body && obj && body->hasObject ( obj ) ) {
         updateOriginDatumSize ();
     }
 }
@@ -406,7 +427,7 @@ void ViewProviderBody::onChanged(const App::Property* prop) {
                 ViewProvider::setOverrideMode("As Is");
                 overrideMode = mode;
             }
-            setDisplayMaskMode("Through");
+            setDisplayMaskMode("Group");
         }
         else {
             if(getOverrideMode() == "As Is")
@@ -434,7 +455,7 @@ void ViewProviderBody::unifyVisualProperty(const App::Property* prop) {
     Gui::Document *gdoc = Gui::Application::Instance->getDocument ( pcObject->getDocument() ) ;
        
     PartDesign::Body *body = static_cast<PartDesign::Body *> ( getObject() );
-    auto features = body->Model.getValues();
+    auto features = body->Group.getValues();
     for(auto feature : features) {
         
         if(!feature->isDerivedFrom(PartDesign::Feature::getClassTypeId()))
@@ -451,7 +472,7 @@ void ViewProviderBody::setVisualBodyMode(bool bodymode) {
     Gui::Document *gdoc = Gui::Application::Instance->getDocument ( pcObject->getDocument() ) ;
        
     PartDesign::Body *body = static_cast<PartDesign::Body *> ( getObject() );
-    auto features = body->Model.getValues();
+    auto features = body->Group.getValues();
     for(auto feature : features) {
         
         if(!feature->isDerivedFrom(PartDesign::Feature::getClassTypeId()))
@@ -461,3 +482,11 @@ void ViewProviderBody::setVisualBodyMode(bool bodymode) {
     }
 }
 
+std::vector< std::string > ViewProviderBody::getDisplayModes(void) const {
+    
+    //we get all dislay modes and remove the "Group" mode, as this is what we use for "Through" 
+    //body display mode
+    std::vector< std::string > modes = ViewProviderPart::getDisplayModes();
+    modes.erase(modes.begin());
+    return modes;
+}

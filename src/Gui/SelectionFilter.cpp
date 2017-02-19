@@ -67,7 +67,7 @@ SelectionFilterGate::~SelectionFilterGate()
     delete Filter;
 }
 
-bool SelectionFilterGate::allow(App::Document*pDoc,App::DocumentObject*pObj, const char*sSubName)
+bool SelectionFilterGate::allow(App::Document* /*pDoc*/, App::DocumentObject*pObj, const char*sSubName)
 {
     return Filter->test(pObj,sSubName);
 }
@@ -276,6 +276,8 @@ Py::Object SelectionFilterPy::repr()
 
 Py::Object SelectionFilterPy::match(const Py::Tuple& args)
 {
+    if (!PyArg_ParseTuple(args.ptr(), ""))
+        throw Py::Exception();
     return Py::Boolean(filter.match());
 }
 
@@ -345,7 +347,20 @@ int SelectionFilterlex(void);
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 // Scanner, defined in SelectionFilter.l
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wsign-compare"
+# pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#elif defined (__GNUC__)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wsign-compare"
+#endif
 #include "lex.SelectionFilter.c"
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#elif defined (__GNUC__)
+# pragma GCC diagnostic pop
+#endif
 #endif // DOXYGEN_SHOULD_SKIP_THIS
 }
 
@@ -362,10 +377,10 @@ bool SelectionFilter::parse(void)
     TopBlock = 0;
     SelectionParser::SelectionFilter_delete_buffer (my_string_buffer);
 
-    if(Errors == "")
+    if (Errors.empty()) {
         return true;
-    else{
+    }
+    else {
         return false;
-        delete Ast;
     }
 }

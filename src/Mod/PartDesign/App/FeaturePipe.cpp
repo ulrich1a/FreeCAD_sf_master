@@ -63,6 +63,7 @@
 #include <Base/Console.h>
 #include <Base/Reader.h>
 #include <App/Document.h>
+#include <Mod/Part/App/FaceMakerCheese.h>
 
 //#include "Body.h"
 #include "FeaturePipe.h"
@@ -72,7 +73,7 @@ using namespace PartDesign;
 
 const char* Pipe::TypeEnums[] = {"FullPath","UpToFace",NULL};
 const char* Pipe::TransitionEnums[] = {"Transformed","Right corner", "Round corner",NULL};
-const char* Pipe::ModeEnums[] = {"Standart", "Fixed", "Frenet", "Auxillery", "Binormal", NULL};
+const char* Pipe::ModeEnums[] = {"Standard", "Fixed", "Frenet", "Auxillery", "Binormal", NULL};
 const char* Pipe::TransformEnums[] = {"Constant", "Multisection", "Linear", "S-shape", "Interpolation", NULL};
 
 
@@ -256,8 +257,8 @@ App::DocumentObjectExecReturn *Pipe::execute(void)
         }
         
         //build the top and bottom face, sew the shell and build the final solid
-        TopoDS_Shape front = makeFace(frontwires);
-        TopoDS_Shape back  = makeFace(backwires);
+        TopoDS_Shape front = Part::FaceMakerCheese::makeFace(frontwires);
+        TopoDS_Shape back  = Part::FaceMakerCheese::makeFace(backwires);
         
         BRepBuilderAPI_Sewing sewer;
         sewer.SetTolerance(Precision::Confusion());
@@ -317,10 +318,8 @@ App::DocumentObjectExecReturn *Pipe::execute(void)
             boolOp = refineShapeIfActive(boolOp);
             Shape.setValue(getSolid(boolOp));
         }
-        
+
         return App::DocumentObject::StdReturn;
-        
-        return ProfileBased::execute();   
     }
     catch (Standard_Failure) {
         Handle_Standard_Failure e = Standard_Failure::Caught();
@@ -371,7 +370,7 @@ void Pipe::setupAlgorithm(BRepOffsetAPI_MakePipeShell& mkPipeShell, TopoDS_Shape
 }
 
 
-void Pipe::getContiniusEdges(Part::TopoShape TopShape, std::vector< std::string >& SubNames) {
+void Pipe::getContiniusEdges(Part::TopoShape /*TopShape*/, std::vector< std::string >& /*SubNames*/) {
 
     /*
     TopTools_IndexedMapOfShape mapOfEdges;

@@ -49,6 +49,7 @@ enum ObjectStatus {
     Recompute = 3,
     Restore = 4,
     Delete = 5,
+    PythonCall = 6,
     Expand = 16
 };
 
@@ -120,20 +121,41 @@ public:
     bool isRestoring() const {return StatusBits.test(4);}
     /// returns true if this objects is currently restoring from file
     bool isDeleting() const {return StatusBits.test(5);}
-    /// recompute only this object
-    virtual App::DocumentObjectExecReturn *recompute(void);
     /// return the status bits
     unsigned long getStatus() const {return StatusBits.to_ulong();}
     bool testStatus(ObjectStatus pos) const {return StatusBits.test((size_t)pos);}
     void setStatus(ObjectStatus pos, bool on) {StatusBits.set((size_t)pos, on);}
     //@}
 
+    /** DAG handling
+        This part of the interface deals with viewing the document as
+        an DAG (directed acyclic graph). 
+    */
+    //@{
     /// returns a list of objects this object is pointing to by Links
     std::vector<App::DocumentObject*> getOutList(void) const;
+    /// returns a list of objects this object is pointing to by Links and all further descended 
+    std::vector<App::DocumentObject*> getOutListRecursive(void) const;
     /// get all objects link to this object
     std::vector<App::DocumentObject*> getInList(void) const;
+    /// get all objects link directly or indirectly to this object 
+    std::vector<App::DocumentObject*> getInListRecursive(void) const;
     /// get group if object is part of a group, otherwise 0 is returned
     DocumentObjectGroup* getGroup() const;
+
+    /// test if this object is in the InList and recursive further down
+    bool isInInListRecursive(DocumentObject* objToTest) const;
+    /// test if this object is directly (non recursive) in the InList
+    bool isInInList(DocumentObject* objToTest) const;
+    /// test if the given object is in the OutList and recursive further down
+    bool isInOutListRecursive(DocumentObject* objToTest) const;
+    /// test if this object is directly (non recursive) in the OutList
+    bool isInOutList(DocumentObject* objToTest) const;
+    /// internal, used by ProperyLink to maintain DAG back links
+    void _removeBackLink(DocumentObject*);
+    /// internal, used by ProperyLink to maintain DAG back links
+    void _addBackLink(DocumentObject*);
+    //@}
 
     /**
      * @brief testIfLinkIsDAG tests a link that is about to be created for
@@ -150,7 +172,6 @@ public:
     bool testIfLinkDAGCompatible(App::PropertyLinkSubList &linksTo) const;
     bool testIfLinkDAGCompatible(App::PropertyLinkSub &linkTo) const;
 
-
 public:
     /** mustExecute
      *  We call this method to check if the object was modified to
@@ -161,6 +182,9 @@ public:
      * -1: the document examine all links of this object and if one is touched -> recompute
      */
     virtual short mustExecute(void) const;
+
+    /// Recompute only this feature
+    bool recomputeFeature();
 
     /// get the status Message
     const char *getStatusString(void) const;
@@ -197,6 +221,8 @@ public:
     const std::string & getOldLabel() const { return oldLabel; }
 
 protected:
+    /// recompute only this object
+    virtual App::DocumentObjectExecReturn *recompute(void);
     /** get called by the document to recompute this feature
       * Normaly this method get called in the processing of
       * Document::recompute().
@@ -233,11 +259,11 @@ protected:
     /// get called after a document has been fully restored
     virtual void onDocumentRestored() {}
     /// get called after setting the document
-    virtual void onSettingDocument() {}
+    virtual void onSettingDocument();
     /// get called after a brand new object was created
-    virtual void setupObject() {}
+    virtual void setupObject();
     /// get called when object is going to be removed from the document
-    virtual void unsetupObject() {}
+    virtual void unsetupObject();
 
      /// python object of this class and all descendend
 protected: // attributes
@@ -255,9 +281,29 @@ protected: // attributes
 
     // pointer to the document name string (for performance)
     const std::string *pcNameInDocument;
+    
+private:
+    // Back pointer to all the fathers in a DAG of the document
+    // this is used by the document (via friend) to have a effective DAG handling
+    std::vector<App::DocumentObject*> _inList;
+    // helper for isInInListRecursive()
+    bool _isInInListRecursive(const DocumentObject *act, const DocumentObject* test, const DocumentObject* checkObj, int depth) const;
+    // helper for isInOutListRecursive()
+    bool _isInOutListRecursive(const DocumentObject *act, const DocumentObject* test, const DocumentObject* checkObj, int depth) const;
+};
+
+class AppExport ObjectStatusLocker
+{
+public:
+    ObjectStatusLocker(ObjectStatus s, DocumentObject* o) : status(s), obj(o)
+    { obj->setStatus(status, true); }
+    ~ObjectStatusLocker()
+    { obj->setStatus(status, false); }
+private:
+    ObjectStatus status;
+    DocumentObject* obj;
 };
 
 } //namespace App
-
 
 #endif // APP_DOCUMENTOBJECT_H

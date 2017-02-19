@@ -53,7 +53,7 @@ using namespace Gui;
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 TaskWidgetPathCompound::TaskWidgetPathCompound(ViewProviderPathCompound *CompoundView,QWidget *parent)
-    : TaskBox(Gui::BitmapFactory().pixmap("Path-Compound"),tr("Compound paths"),true, parent),CompoundView(CompoundView)
+    : TaskBox(Gui::BitmapFactory().pixmap("Path-Compound"),tr("Compound paths"),true, parent)
 {
     // we need a separate container widget to add all controls to
     proxy = new QWidget(this);
@@ -127,6 +127,7 @@ void TaskDlgPathCompound::open()
 
 void TaskDlgPathCompound::clicked(int button)
 {
+    Q_UNUSED(button);
 }
 
 bool TaskDlgPathCompound::accept()

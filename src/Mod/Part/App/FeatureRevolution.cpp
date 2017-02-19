@@ -28,6 +28,7 @@
 # include <BRepAdaptor_Curve.hxx>
 # include <gp_Lin.hxx>
 # include <gp_Circ.hxx>
+# include <TopExp_Explorer.hxx>
 #endif
 
 
@@ -35,6 +36,7 @@
 #include <Base/Tools.h>
 #include <Base/Exception.h>
 #include <App/Application.h>
+#include "FaceMaker.h"
 
 using namespace Part;
 
@@ -52,6 +54,7 @@ Revolution::Revolution()
     Angle.setConstraints(&angleRangeU);
     ADD_PROPERTY_TYPE(Symmetric,(false),"Revolve",App::Prop_None,"Extend revolution symmetrically from the profile.");
     ADD_PROPERTY_TYPE(Solid,(false),"Revolve",App::Prop_None,"Make revolution a solid if possible");
+    ADD_PROPERTY_TYPE(FaceMakerClass,(""),"Revolve",App::Prop_None,"Facemaker to use if Solid is true."); //default for old documents. For default for new objects, refer to setupObject().
 }
 
 short Revolution::mustExecute() const
@@ -62,7 +65,8 @@ short Revolution::mustExecute() const
         Source.isTouched() ||
         Solid.isTouched() ||
         AxisLink.isTouched() ||
-        Symmetric.isTouched())
+        Symmetric.isTouched() ||
+        FaceMakerClass.isTouched())
         return 1;
     return 0;
 }
@@ -106,8 +110,9 @@ bool Revolution::fetchAxisLink(const App::PropertyLinkSub &axisLink,
     BRepAdaptor_Curve crv(TopoDS::Edge(axEdge));
     gp_Pnt base;
     gp_Dir occdir;
+    bool reversed = axEdge.Orientation() == TopAbs_REVERSED;
     if (crv.GetType() == GeomAbs_Line){
-        base = crv.Value(crv.FirstParameter());
+        base = crv.Value(reversed ? crv.FirstParameter() : crv.LastParameter());
         occdir = crv.Line().Direction();
     } else if (crv.GetType() == GeomAbs_Circle) {
         base = crv.Circle().Axis().Location();
@@ -116,6 +121,8 @@ bool Revolution::fetchAxisLink(const App::PropertyLinkSub &axisLink,
     } else {
         throw Base::TypeError("AxisLink edge is neither line nor arc of circle.");
     }
+    if (reversed)
+        occdir.Reverse();
     center.Set(base.X(), base.Y(),base.Z());
     dir.Set(occdir.X(), occdir.Y(), occdir.Z());
     return true;
@@ -160,8 +167,32 @@ App::DocumentObjectExecReturn *Revolution::execute(void)
             sourceShape.setShape(sourceShape.getShape().Moved(loc));
         }
 
-        //do it!
+        //"make solid" processing: make faces from wires.
         Standard_Boolean makeSolid = Solid.getValue() ? Standard_True : Standard_False;
+        if (makeSolid){
+            //test if we need to make faces from wires. If there are faces - we don't.
+            TopExp_Explorer xp(sourceShape.getShape(), TopAbs_FACE);
+            if (xp.More())
+                //source shape has faces. Just revolve as-is.
+                makeSolid = Standard_False;
+        }
+        if (makeSolid && strlen(this->FaceMakerClass.getValue())>0){
+            //new facemaking behavior: use facemaker class
+            std::unique_ptr<FaceMaker> mkFace = FaceMaker::ConstructFromType(this->FaceMakerClass.getValue());
+
+            TopoDS_Shape myShape = sourceShape.getShape();
+            if(myShape.ShapeType() == TopAbs_COMPOUND)
+                mkFace->useCompound(TopoDS::Compound(myShape));
+            else
+                mkFace->addShape(myShape);
+            mkFace->Build();
+            myShape = mkFace->Shape();
+            sourceShape = TopoShape(myShape);
+
+            makeSolid = Standard_False;//don't ask TopoShape::revolve to make solid, as we've made faces...
+        }
+
+        // actual revolution!
         TopoDS_Shape revolve = sourceShape.revolve(revAx, angle, makeSolid);
 
         if (revolve.IsNull())
@@ -173,4 +204,12 @@ App::DocumentObjectExecReturn *Revolution::execute(void)
         Handle_Standard_Failure e = Standard_Failure::Caught();
         return new App::DocumentObjectExecReturn(e->GetMessageString());
     }
+}
+
+
+
+void Part::Revolution::setupObject()
+{
+    Part::Feature::setupObject();
+    this->FaceMakerClass.setValue("Part::FaceMakerBullseye"); //default for newly created features
 }

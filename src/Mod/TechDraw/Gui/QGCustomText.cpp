@@ -40,6 +40,8 @@
 
 #include <qmath.h>
 #include <QRectF>
+#include "Rez.h"
+#include "QGIView.h"
 #include "QGCustomText.h"
 
 using namespace TechDrawGui;
@@ -50,6 +52,9 @@ QGCustomText::QGCustomText()
     setAcceptHoverEvents(false);
     setFlag(QGraphicsItem::ItemIsSelectable, false);
     setFlag(QGraphicsItem::ItemIsMovable, false);
+
+    isHighlighted = false;
+    m_colCurrent = getNormalColor();
 }
 
 void QGCustomText::centerAt(QPointF centerPos)
@@ -72,45 +77,104 @@ void QGCustomText::centerAt(double cX, double cY)
     setPos(newX,newY);
 }
 
+QVariant QGCustomText::itemChange(GraphicsItemChange change, const QVariant &value)
+{
+    if (change == ItemSelectedHasChanged && scene()) {
+        if(isSelected()) {
+            setPrettySel();
+        } else {
+            setPrettyNormal();
+        }
+    }
+    return QGraphicsTextItem::itemChange(change, value);
+}
+
+
+void QGCustomText::hoverEnterEvent(QGraphicsSceneHoverEvent *event)
+{
+    if (!isSelected()) {
+        setPrettyPre();
+    }
+    QGraphicsTextItem::hoverEnterEvent(event);
+}
+
+void QGCustomText::hoverLeaveEvent(QGraphicsSceneHoverEvent *event)
+{
+    if(!isSelected() && !isHighlighted) {
+        setPrettyNormal();
+    }
+    QGraphicsTextItem::hoverLeaveEvent(event);
+}
+
+void QGCustomText::setPrettyNormal() {
+    m_colCurrent = getNormalColor();
+    update();
+}
+
+void QGCustomText::setPrettyPre() {
+    m_colCurrent = getPreColor();
+    update();
+}
+
+void QGCustomText::setPrettySel() {
+    m_colCurrent = getSelectColor();
+    update();
+}
+
 void QGCustomText::paint ( QPainter * painter, const QStyleOptionGraphicsItem * option, QWidget * widget) {
     QStyleOptionGraphicsItem myOption(*option);
     myOption.state &= ~QStyle::State_Selected;
 
-    //svg text is much larger than screen text.  scene units(mm) vs points.
+    //svg text is much larger than screen text.  scene units(mm or 0.1mm in hirez) vs points.
     //need to scale text if going to svg.
-    //TODO: magic translation happens? approx: right ~8mm  down: 12mm + (3mm per mm of text height)
+    //TODO: magic translation happens. why? approx: right ~8mm  down: 12mm + (3mm per mm of text height)
     //SVG transform matrix translation values are different for same font size + different fonts (Sans vs Ubuntu vs Arial)???
     //                     scale values are same for same font size + different fonts.
-    //double svgScale = 2.835;      //72dpi/(25.4mm/in)
-    //double svgScale = 3.84;       //96dpi/(25mm/in)
-    double svgScale = 2.88;         //72dpi/(25mm/in)   Qt logicalDpiY() is int
-    double svgMagicX = 8.0;
-    //double svgMagicY = 7.5;        //idk
-    double fontSize = font().pointSizeF();
-    //double ty = (12.0/svgScale + 3.0*fontSize/svgScale) + (svgMagicY/svgScale);
-    double ty = (12.0/svgScale + 3.0*fontSize/svgScale);
-    QPointF svgMove(-svgMagicX/svgScale,-ty);
+    //calculate dots/mm 
+    //in hirez - say factor = 10, we have 10 dpmm in scene space. 
+    //  so 254dpi / 72pts/in  => 3.53 dppt 
+    double dpmm = 3.53;         //dots/pt
+    double svgMagicX = Rez::guiX(8.0);                      //8mm -> 80 gui dots
+    double svgMagicY = Rez::guiX(12.0);
+    double svgMagicYoffset = Rez::guiX(3.0);                // 3mm per mm of font size => 30gunits / mm of font size
+    double fontSize = Rez::appX(font().pointSizeF());       //gui pts 4mm text * 10 scunits/mm = size 40 text but still only 4mm
+    double ty = svgMagicY + (svgMagicYoffset*fontSize)/dpmm;
+                    // 12mm (in gunits) + [3mm (in gunits) * (# of mm)]/ [dots per mm]  works out to dots?
+    QPointF svgMove(-svgMagicX/dpmm,ty);
 
     QPaintDevice* hw = painter->device();
-    //QPaintDeviceMetrics hwm(hw);
-    //QPrinter* pr = dynamic_cast<QPrinter*>(hw);                      //printer does not rescale vs screen?
     QSvgGenerator* svg = dynamic_cast<QSvgGenerator*>(hw);
     if (svg) {
-        painter->scale(svgScale,svgScale);
+        painter->scale(Rez::appX(dpmm),Rez::appX(dpmm));
         painter->translate(svgMove);
     } else {
         painter->scale(1.0,1.0);
     }
 
+    setDefaultTextColor(m_colCurrent);
     QGraphicsTextItem::paint (painter, &myOption, widget);
 }
 
 QColor QGCustomText::getNormalColor()
 {
-    Base::Reference<ParameterGrp> hGrp = getParmGroup();
-    App::Color fcColor;
-    fcColor.setPackedValue(hGrp->GetUnsigned("NormalColor", 0x00000000));
-    return fcColor.asValue<QColor>();
+    QColor result;
+    QGIView *parent;
+    QGraphicsItem* qparent = parentItem();
+    if (qparent == nullptr) {
+        parent = nullptr;
+    } else {
+        parent = dynamic_cast<QGIView *> (qparent);
+    }
+
+    if (parent != nullptr) {
+        result = parent->getNormalColor();
+    } else {
+        Base::Reference<ParameterGrp> hGrp = getParmGroup();
+        App::Color fcColor;
+        fcColor.setPackedValue(hGrp->GetUnsigned("NormalColor", 0x00000000));
+        result = fcColor.asValue<QColor>();
+    }
+    return result;
 }
 
 QColor QGCustomText::getPreColor()

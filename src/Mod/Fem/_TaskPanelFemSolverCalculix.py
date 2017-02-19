@@ -24,24 +24,25 @@ __title__ = "CalculiX Job Control Task Panel"
 __author__ = "Juergen Riegel"
 __url__ = "http://www.freecadweb.org"
 
+## @package TaskPanelFemSolverCalculix
+#  \ingroup FEM
+
 import FemToolsCcx
 import FreeCAD
 import os
 import time
-
-if FreeCAD.GuiUp:
-    import FreeCADGui
-    import FemGui
-    from PySide import QtCore, QtGui
-    from PySide.QtCore import Qt
-    from PySide.QtGui import QApplication
+import FreeCADGui
+import FemGui
+from PySide import QtCore, QtGui
+from PySide.QtCore import Qt
+from PySide.QtGui import QApplication
 
 
 class _TaskPanelFemSolverCalculix:
     def __init__(self, solver_object):
         self.form = FreeCADGui.PySideUic.loadUi(FreeCAD.getHomePath() + "Mod/Fem/TaskPanelFemSolverCalculix.ui")
-        self.fem_prefs = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem")
-        ccx_binary = self.fem_prefs.GetString("ccxBinaryPath", "")
+        self.ccx_prefs = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem/Ccx")
+        ccx_binary = self.ccx_prefs.GetString("ccxBinaryPath", "")
         if ccx_binary:
             self.CalculixBinary = ccx_binary
             print ("Using CalculiX binary path from FEM preferences: {}".format(ccx_binary))
@@ -53,7 +54,6 @@ class _TaskPanelFemSolverCalculix:
                 self.CalculixBinary = FreeCAD.getHomePath() + 'bin/ccx.exe'
             else:
                 self.CalculixBinary = 'ccx'
-        self.fem_prefs = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Fem")
 
         self.solver_object = solver_object
 
@@ -80,6 +80,25 @@ class _TaskPanelFemSolverCalculix:
         QtCore.QObject.connect(self.Timer, QtCore.SIGNAL("timeout()"), self.UpdateText)
 
         self.update()
+
+    def getStandardButtons(self):
+        # only show a close button
+        # def accept() in no longer needed, since there is no OK button
+        return int(QtGui.QDialogButtonBox.Close)
+
+    def reject(self):
+        FreeCADGui.ActiveDocument.resetEdit()
+
+    def update(self):
+        'fills the widgets'
+        self.form.le_working_dir.setText(self.solver_object.WorkingDir)
+        if self.solver_object.AnalysisType == 'static':
+            self.form.rb_static_analysis.setChecked(True)
+        elif self.solver_object.AnalysisType == 'frequency':
+            self.form.rb_frequency_analysis.setChecked(True)
+        elif self.solver_object.AnalysisType == 'thermomech':
+            self.form.rb_thermomech_analysis.setChecked(True)
+        return
 
     def femConsoleMessage(self, message="", color="#000000"):
         self.fem_console_message = self.fem_console_message + '<font color="#0000FF">{0:4.1f}:</font> <font color="{1}">{2}</font><br>'.\
@@ -150,26 +169,6 @@ class _TaskPanelFemSolverCalculix:
         QApplication.restoreOverrideCursor()
         self.form.l_time.setText('Time: {0:4.1f}: '.format(time.time() - self.Start))
 
-    def getStandardButtons(self):
-        return int(QtGui.QDialogButtonBox.Close)
-
-    def update(self):
-        'fills the widgets'
-        self.form.le_working_dir.setText(self.solver_object.WorkingDir)
-        if self.solver_object.AnalysisType == 'static':
-            self.form.rb_static_analysis.setChecked(True)
-        elif self.solver_object.AnalysisType == 'frequency':
-            self.form.rb_frequency_analysis.setChecked(True)
-        elif self.solver_object.AnalysisType == 'thermomech':
-            self.form.rb_thermomech_analysis.setChecked(True)
-        return
-
-    def accept(self):
-        FreeCADGui.ActiveDocument.resetEdit()
-
-    def reject(self):
-        FreeCADGui.ActiveDocument.resetEdit()
-
     def choose_working_dir(self):
         current_wd = self.setup_working_dir()
         wd = QtGui.QFileDialog.getExistingDirectory(None, 'Choose CalculiX working directory',
@@ -222,10 +221,10 @@ class _TaskPanelFemSolverCalculix:
 
     def editCalculixInputFile(self):
         print ('editCalculixInputFile {}'.format(self.inp_file_name))
-        if self.fem_prefs.GetBool("UseInternalEditor", True):
+        if self.ccx_prefs.GetBool("UseInternalEditor", True):
             FemGui.open(self.inp_file_name)
         else:
-            ext_editor_path = self.fem_prefs.GetString("ExternalEditorPath", "")
+            ext_editor_path = self.ccx_prefs.GetString("ExternalEditorPath", "")
             if ext_editor_path:
                 self.start_ext_editor(ext_editor_path, self.inp_file_name)
             else:

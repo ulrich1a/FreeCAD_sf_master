@@ -59,6 +59,7 @@ void ButtonView::selectButton(int number)
 
 void ButtonView::goSelectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
 {
+    Q_UNUSED(deselected); 
     if (selected.indexes().isEmpty())
         return;
     QModelIndex select(selected.indexes().at(0));
@@ -82,6 +83,7 @@ ButtonModel::ButtonModel(QObject *parent) : QAbstractListModel(parent)
 
 int ButtonModel::rowCount (const QModelIndex &parent) const
 {
+    Q_UNUSED(parent); 
     return spaceballButtonGroup()->GetGroups().size();
 }
 
@@ -278,6 +280,7 @@ int CommandModel::rowCount(const QModelIndex &parent) const
 
 int CommandModel::columnCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent); 
     return 1;
 }
 
@@ -474,11 +477,13 @@ PrintModel::PrintModel(QObject *parent, ButtonModel *buttonModelIn, CommandModel
 
 int PrintModel::rowCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent); 
     return buttonModel->rowCount();
 }
 
 int PrintModel::columnCount(const QModelIndex &parent) const
 {
+    Q_UNUSED(parent); 
     return 2;
 }
 
@@ -628,7 +633,11 @@ void DlgCustomizeSpaceball::goPrint()
 {
     QTableView *view = new QTableView(this);
     PrintModel *model = new PrintModel(this, buttonModel, commandModel);
+#if QT_VERSION >= 0x050000
+    view->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+#else
     view->horizontalHeader()->setResizeMode(QHeaderView::Fixed);
+#endif
     view->setModel(model);
     view->horizontalHeader()->resizeSection(0, 150);
     view->horizontalHeader()->resizeSection(1, 300);
@@ -712,6 +721,7 @@ void DlgCustomizeSpaceball::onRemoveMacroAction(const QByteArray &macroName)
 void DlgCustomizeSpaceball::onModifyMacroAction(const QByteArray &macroName)
 {
     //don't think I need to do anything here.
+    Q_UNUSED(macroName); 
 }
 
 #include "moc_DlgCustomizeSpaceball.cpp"

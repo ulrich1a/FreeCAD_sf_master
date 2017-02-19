@@ -22,6 +22,7 @@
 # *                                                                         *
 # ***************************************************************************
 
+from __future__ import print_function
 import FreeCAD
 import Path
 import Part
@@ -49,23 +50,23 @@ except AttributeError:
 class ObjectDrilling:
 
     def __init__(self, obj):
-        obj.addProperty("App::PropertyLinkSubList", "Base","Path", "The base geometry of this toolpath")
-        obj.addProperty("App::PropertyBool", "Active", "Path", "Make False, to prevent operation from generating code")
-        obj.addProperty("App::PropertyString", "Comment", "Path", "An optional comment for this profile")
-        obj.addProperty("App::PropertyString", "UserLabel", "Path", "User Assigned Label")
+        obj.addProperty("App::PropertyLinkSubList", "Base","Path", QtCore.QT_TRANSLATE_NOOP("App::Property","The base geometry of this toolpath"))
+        obj.addProperty("App::PropertyBool", "Active", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property","Make False, to prevent operation from generating code"))
+        obj.addProperty("App::PropertyString", "Comment", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property","An optional comment for this profile"))
+        obj.addProperty("App::PropertyString", "UserLabel", "Path", QtCore.QT_TRANSLATE_NOOP("App::Property","User Assigned Label"))
 
-        obj.addProperty("App::PropertyLength", "PeckDepth", "Depth", "Incremental Drill depth before retracting to clear chips")
-        obj.addProperty("App::PropertyLength", "StartDepth", "Depth", "Starting Depth of Tool- first cut depth in Z")
-        obj.addProperty("App::PropertyDistance", "ClearanceHeight", "Depth", "The height needed to clear clamps and obstructions")
-        obj.addProperty("App::PropertyDistance", "FinalDepth", "Depth", "Final Depth of Tool- lowest value in Z")
-        obj.addProperty("App::PropertyDistance", "SafeHeight", "Depth", "Height to clear top of materil")
-        obj.addProperty("App::PropertyDistance", "RetractHeight", "Depth", "The height where feed starts and height during retract tool when path is finished")
-
+        obj.addProperty("App::PropertyLength", "PeckDepth", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","Incremental Drill depth before retracting to clear chips"))
+        obj.addProperty("App::PropertyLength", "StartDepth", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","Starting Depth of Tool- first cut depth in Z"))
+        obj.addProperty("App::PropertyDistance", "ClearanceHeight", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","The height needed to clear clamps and obstructions"))
+        obj.addProperty("App::PropertyDistance", "FinalDepth", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","Final Depth of Tool- lowest value in Z"))
+        obj.addProperty("App::PropertyDistance", "SafeHeight", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","Height to clear top of materil"))
+        obj.addProperty("App::PropertyDistance", "RetractHeight", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","The height where feed starts and height during retract tool when path is finished"))
+        obj.addProperty("App::PropertyFloat", "DwellTime", "Depth", QtCore.QT_TRANSLATE_NOOP("App::Property","The time to dwell between peck cycles"))
         # Tool Properties
-        obj.addProperty("App::PropertyIntegerConstraint", "ToolNumber", "Tool", "The tool number in use")
+        obj.addProperty("App::PropertyIntegerConstraint", "ToolNumber", "Tool", QtCore.QT_TRANSLATE_NOOP("App::Property","The tool number in use"))
         obj.ToolNumber = (0, 0, 1000, 1)
         obj.setEditorMode('ToolNumber', 1)  # make this read only
-        obj.addProperty("App::PropertyString", "ToolDescription", "Tool", "The description of the tool ")
+        obj.addProperty("App::PropertyString", "ToolDescription", "Tool", QtCore.QT_TRANSLATE_NOOP("App::Property","The description of the tool "))
         obj.setEditorMode('ToolDescription', 1) # make this read onlyt
 
 
@@ -90,15 +91,21 @@ class ObjectDrilling:
         if toolLoad is None or toolLoad.ToolNumber == 0:
             self.vertFeed = 100
             self.horizFeed = 100
+            self.vertRapid = 100
+            self.horizRapid = 100
             self.radius = 0.25
             obj.ToolNumber = 0
             obj.ToolDescription = "UNDEFINED"
-
         else:
             self.vertFeed = toolLoad.VertFeed.Value
             self.horizFeed = toolLoad.HorizFeed.Value
+            self.vertRapid = toolLoad.VertRapid.Value
+            self.horizRapid = toolLoad.HorizRapid.Value
             tool = PathUtils.getTool(obj, toolLoad.ToolNumber)
-            self.radius = tool.Diameter/2
+            if tool.Diameter == 0:
+                self.radius = 0.25
+            else:
+                self.radius = tool.Diameter/2
             obj.ToolNumber = toolLoad.ToolNumber
             obj.ToolDescription = toolLoad.Name
 
@@ -111,7 +118,9 @@ class ObjectDrilling:
         output = "(Begin Drilling)\n"
         if obj.Base:
             for loc in obj.Base:
+                #print loc
                 for sub in loc[1]:
+                    #locations.append(self._findDrillingVector(loc))
 
                     if "Face" in sub or "Edge" in sub:
                         s = getattr(loc[0].Shape, sub)
@@ -136,23 +145,27 @@ class ObjectDrilling:
 
             output += "G90 G98\n"
             # rapid to clearance height
-            output += "G0 Z" + str(obj.ClearanceHeight.Value)
+            output += "G0 Z" + str(obj.ClearanceHeight.Value) + "F " + PathUtils.fmt(self.vertRapid) + "\n"
             # rapid to first hole location, with spindle still retracted:
             p0 = locations[0]
-            output += "G0 X" + fmt(p0.x) + " Y" + fmt(p0.y) + "\n"
+            output += "G0 X" + fmt(p0.x) + " Y" + fmt(p0.y)  + "F " + PathUtils.fmt(self.horizRapid) + "\n"
             # move tool to clearance plane
-            output += "G0 Z" + fmt(obj.ClearanceHeight.Value) + "\n"
+            output += "G0 Z" + fmt(obj.ClearanceHeight.Value)  + "F " + PathUtils.fmt(self.vertRapid) + "\n"
+            pword = ""
+            qword = ""
             if obj.PeckDepth.Value > 0:
                 cmd = "G83"
                 qword = " Q" + fmt(obj.PeckDepth.Value)
+            elif obj.DwellTime > 0:
+                cmd = "G82"
+                pword = " P" + fmt(obj.DwellTime)
             else:
                 cmd = "G81"
-                qword = ""
             for p in locations:
                 output += cmd + \
                     " X" + fmt(p.x) + \
                     " Y" + fmt(p.y) + \
-                    " Z" + fmt(obj.FinalDepth.Value) + qword + \
+                    " Z" + fmt(obj.FinalDepth.Value) + qword + pword + \
                     " R" + str(obj.RetractHeight.Value) + \
                     " F" + str(self.vertFeed) + "\n" \
 
@@ -174,20 +187,33 @@ class ObjectDrilling:
 
 
     def checkdrillable(self, obj, sub):
-        print "in checkdrillable"
         drillable = False
         if obj.ShapeType == 'Vertex':
                 drillable = True
-        elif obj.ShapeType == 'Solid':
+        elif obj.ShapeType in['Solid', 'Compound']:
             if sub[0:4] == 'Face':
                 subobj = obj.getElement(sub)
-                drillable = isinstance(subobj.Edges[0].Curve, Part.Circle)
-                if str(subobj.Surface) == "<Cylinder object>":
+                if isinstance(subobj.Edges[0].Curve, Part.Circle):
                     drillable = True
-
+                if str(subobj.Surface) == "<Cylinder object>":
+                    drillable = subobj.isClosed()
+                if len(subobj.Edges) == 3:
+                    cedge = []
+                    ledge = []
+                    for e in subobj.Edges:
+                        if isinstance (e.Curve, Part.Circle):
+                            cedge.append(e)
+                        elif isinstance (e.Curve, Part.LineSegment):
+                            ledge.append(e)
+                    if len(cedge) == 2 and len(ledge) == 1:
+                        drillable = True
+                    else:
+                #if len(subobj.Edges[0].Vertexes) > 1:
+                        drillable = False
             if sub[0:4] == 'Edge':
                 o = obj.getElement(sub)
-                drillable = isinstance(o.Curve, Part.Circle)
+                if isinstance(o.Curve, Part.Circle):
+                    drillable = True
 
         return drillable
 
@@ -213,14 +239,75 @@ class ObjectDrilling:
                 obj.ClearanceHeight = 10.0
                 obj.SafeHeight = 8.0
                 obj.RetractHeight = 6.0
-        if self.checkdrillable(ss.Shape,sub):
 
-            if item in baselist:
-                FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+        if not self.checkdrillable(ss.Shape,sub):
+            FreeCAD.Console.PrintError("Selected element is not a drillable location" + "\n")
+            return
+
+        if sub[0:4] == 'Face':
+            # Check for other drillable faces and give user the option
+            drillableFaces = []
+
+            for i in range(len(ss.Shape.Faces)):
+                if self.checkdrillable(ss.Shape, "Face" + str(i+1)):
+                    drillableFaces.append("Face" + str(i+1))
+            if len(drillableFaces) > 1:
+                reply = QtGui.QMessageBox.question(None,"","Multiple drillable faces found.  Drill them all?",
+                        QtGui.QMessageBox.Yes | QtGui.QMessageBox.No, QtGui.QMessageBox.No)
+                if reply == QtGui.QMessageBox.Yes:
+                    for i in drillableFaces:
+                        if i in baselist:
+                            FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+                            continue
+                        else:
+                            newitem = (ss, i)
+                            baselist.append(newitem)
+                else:
+                    if item in baselist:
+                        FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+                    else:
+                        baselist.append(item)
             else:
-                baselist.append(item)
-            obj.Base = baselist
-            self.execute(obj)
+                if item in baselist:
+                    FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+                else:
+                    baselist.append(item)
+
+
+        if sub[0:4] == 'Edge':
+            drillableEdges = []
+            o = ss.Shape.getElement(sub)
+
+            for i in range(len(ss.Shape.Edges)):
+                candidateedge = ss.Shape.getElement("Edge" + str(i+1))
+                if self.checkdrillable(ss.Shape, "Edge" + str(i+1)):
+                    if candidateedge.Curve.Radius == o.Curve.Radius and candidateedge.Curve.Center.z == o.Curve.Center.z:
+                        drillableEdges.append("Edge" + str(i+1))
+            if len(drillableEdges) > 1:
+                reply = QtGui.QMessageBox.question(None,"","Multiple drillable edges found.  Drill them all?",
+                        QtGui.QMessageBox.Yes | QtGui.QMessageBox.No, QtGui.QMessageBox.No)
+                if reply == QtGui.QMessageBox.Yes:
+                    for i in drillableEdges:
+                        if i in baselist:
+                            FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+                            continue
+                        else:
+                            newitem = (ss, i)
+                            baselist.append(newitem)
+                else:
+                    if item in baselist:
+                        FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+                    else:
+                        baselist.append(item)
+            else:
+                if item in baselist:
+                    FreeCAD.Console.PrintWarning("Drillable location already in the list" + "\n")
+                else:
+                    baselist.append(item)
+
+        print(baselist)
+        obj.Base = baselist
+        self.execute(obj)
 
 
 class _ViewProviderDrill:
@@ -266,7 +353,11 @@ class CommandPathDrilling:
                 'ToolTip': QtCore.QT_TRANSLATE_NOOP("Path_Drilling", "Creates a Path Drilling object")}
 
     def IsActive(self):
-        return FreeCAD.ActiveDocument is not None
+        if FreeCAD.ActiveDocument is not None:
+            for o in FreeCAD.ActiveDocument.Objects:
+                if o.Name[:3] == "Job":
+                        return True
+        return False
 
     def Activated(self):
 
@@ -283,7 +374,7 @@ class CommandPathDrilling:
         FreeCADGui.doCommand('obj.ClearanceHeight = ' + str(ztop))
         FreeCADGui.doCommand('obj.RetractHeight= ' + str(ztop))
         FreeCADGui.doCommand('obj.FinalDepth=' + str(zbottom))
-        FreeCADGui.doCommand('PathScripts.PathUtils.addToProject(obj)')
+        FreeCADGui.doCommand('PathScripts.PathUtils.addToJob(obj)')
 
         FreeCAD.ActiveDocument.commitTransaction()
         FreeCAD.ActiveDocument.recompute()
@@ -310,27 +401,27 @@ class TaskPanel:
     def getFields(self):
         if self.obj:
             if hasattr(self.obj, "StartDepth"):
-                self.obj.StartDepth = self.form.startDepth.text()
+                self.obj.StartDepth = FreeCAD.Units.Quantity(self.form.startDepth.text()).Value
             if hasattr(self.obj, "FinalDepth"):
-                self.obj.FinalDepth = self.form.finalDepth.text()
+                self.obj.FinalDepth = FreeCAD.Units.Quantity(self.form.finalDepth.text()).Value
             if hasattr(self.obj, "PeckDepth"):
-                self.obj.PeckDepth = self.form.peckDepth.text()
+                self.obj.PeckDepth = FreeCAD.Units.Quantity(self.form.peckDepth.text()).Value
             if hasattr(self.obj, "SafeHeight"):
-                self.obj.SafeHeight = self.form.safeHeight.text()
+                self.obj.SafeHeight = FreeCAD.Units.Quantity(self.form.safeHeight.text()).Value
             if hasattr(self.obj, "ClearanceHeight"):
-                self.obj.ClearanceHeight = self.form.clearanceHeight.text()
+                self.obj.ClearanceHeight = FreeCAD.Units.Quantity(self.form.clearanceHeight.text()).Value
             if hasattr(self.obj, "RetractHeight"):
-                self.obj.RetractHeight = self.form.retractHeight.text()
+                self.obj.RetractHeight = FreeCAD.Units.Quantity(self.form.retractHeight.text()).Value
 
         self.obj.Proxy.execute(self.obj)
 
     def setFields(self):
-        self.form.startDepth.setText(str(self.obj.StartDepth.Value))
-        self.form.finalDepth.setText(str(self.obj.FinalDepth.Value))
-        self.form.peckDepth.setText(str(self.obj.PeckDepth.Value))
-        self.form.safeHeight.setText(str(self.obj.SafeHeight.Value))
-        self.form.clearanceHeight.setText(str(self.obj.ClearanceHeight.Value))
-        self.form.retractHeight.setText(str(self.obj.RetractHeight.Value))
+        self.form.startDepth.setText(FreeCAD.Units.Quantity(self.obj.StartDepth.Value, FreeCAD.Units.Length).UserString)
+        self.form.finalDepth.setText(FreeCAD.Units.Quantity(self.obj.FinalDepth.Value, FreeCAD.Units.Length).UserString)
+        self.form.peckDepth.setText(FreeCAD.Units.Quantity(self.obj.PeckDepth.Value, FreeCAD.Units.Length).UserString)
+        self.form.safeHeight.setText(FreeCAD.Units.Quantity(self.obj.SafeHeight.Value, FreeCAD.Units.Length).UserString)
+        self.form.clearanceHeight.setText(FreeCAD.Units.Quantity(self.obj.ClearanceHeight.Value, FreeCAD.Units.Length).UserString)
+        self.form.retractHeight.setText(FreeCAD.Units.Quantity(self.obj.RetractHeight.Value, FreeCAD.Units.Length).UserString)
 
         self.form.baseList.clear()
         for i in self.obj.Base:

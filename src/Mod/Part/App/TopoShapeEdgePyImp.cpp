@@ -43,6 +43,7 @@
 # include <Geom_TrimmedCurve.hxx>
 # include <Geom_BezierCurve.hxx>
 # include <Geom_BSplineCurve.hxx>
+# include <Geom_OffsetCurve.hxx>
 # include <gp_Circ.hxx>
 # include <gp_Elips.hxx>
 # include <gp_Hypr.hxx>
@@ -54,6 +55,7 @@
 # include <TopoDS_Vertex.hxx>
 # include <ShapeAnalysis_Edge.hxx>
 # include <Standard_Failure.hxx>
+# include <Standard_Version.hxx>
 #endif
 
 #include <BRepGProp.hxx>
@@ -72,21 +74,22 @@
 #include "Tools.h"
 #include "OCCError.h"
 #include "TopoShape.h"
-#include "TopoShapeFacePy.h"
-#include "TopoShapeVertexPy.h"
-#include "TopoShapeWirePy.h"
-#include "TopoShapeEdgePy.h"
-#include "TopoShapeEdgePy.cpp"
+#include <Mod/Part/App/TopoShapeFacePy.h>
+#include <Mod/Part/App/TopoShapeVertexPy.h>
+#include <Mod/Part/App/TopoShapeWirePy.h>
+#include <Mod/Part/App/TopoShapeEdgePy.h>
+#include <Mod/Part/App/TopoShapeEdgePy.cpp>
 
 #include "Geometry.h"
-#include "GeometryPy.h"
-#include "LinePy.h"
-#include "CirclePy.h"
-#include "EllipsePy.h"
-#include "HyperbolaPy.h"
-#include "ParabolaPy.h"
-#include "BezierCurvePy.h"
-#include "BSplineCurvePy.h"
+#include <Mod/Part/App/GeometryPy.h>
+#include <Mod/Part/App/LinePy.h>
+#include <Mod/Part/App/CirclePy.h>
+#include <Mod/Part/App/EllipsePy.h>
+#include <Mod/Part/App/HyperbolaPy.h>
+#include <Mod/Part/App/ParabolaPy.h>
+#include <Mod/Part/App/BezierCurvePy.h>
+#include <Mod/Part/App/BSplineCurvePy.h>
+#include <Mod/Part/App/OffsetCurvePy.h>
 
 using namespace Part;
 
@@ -101,7 +104,7 @@ std::string TopoShapeEdgePy::representation(void) const
 
 PyObject *TopoShapeEdgePy::PyMake(struct _typeobject *, PyObject *, PyObject *)  // Python wrapper
 {
-    // create a new instance of TopoShapeEdgePy and the Twin object 
+    // create a new instance of TopoShapeEdgePy and the Twin object
     return new TopoShapeEdgePy(new TopoShape);
 }
 
@@ -624,9 +627,6 @@ PyObject* TopoShapeEdgePy::split(PyObject *args)
         PyErr_SetString(PartExceptionOCCError, e->GetMessageString());
         return 0;
     }
-
-    PyErr_SetString(PartExceptionOCCError, "Geometry is not a curve");
-    return 0;
 }
 
 PyObject* TopoShapeEdgePy::isSeam(PyObject *args)
@@ -683,6 +683,9 @@ Py::Float TopoShapeEdgePy::getLength(void) const
     return Py::Float(GCPnts_AbscissaPoint::Length(adapt));
 }
 
+#include <App/Application.h>
+#include <Mod/Part/App/LineSegmentPy.h>
+
 Py::Object TopoShapeEdgePy::getCurve() const
 {
     const TopoDS_Edge& e = TopoDS::Edge(getTopoShapePtr()->getShape());
@@ -691,14 +694,41 @@ Py::Object TopoShapeEdgePy::getCurve() const
     {
     case GeomAbs_Line:
         {
-            GeomLineSegment* line = new GeomLineSegment();
-            Handle_Geom_TrimmedCurve this_curv = Handle_Geom_TrimmedCurve::DownCast
-                (line->handle());
-            Handle_Geom_Line this_line = Handle_Geom_Line::DownCast
-                (this_curv->BasisCurve());
-            this_line->SetLin(adapt.Line());
-            this_curv->SetTrim(adapt.FirstParameter(), adapt.LastParameter());
-            return Py::Object(new LinePy(line),true);
+            static bool LineOld = true;
+            static bool init = false;
+            if (!init) {
+                init = true;
+                Base::Reference<ParameterGrp> hPartGrp = App::GetApplication().GetUserParameter()
+                    .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/Part");
+                Base::Reference<ParameterGrp> hGenPGrp = hPartGrp->GetGroup("General");
+                LineOld = hGenPGrp->GetBool("LineOld", false);
+            }
+
+            if (LineOld) {
+                GeomLineSegment* line = new GeomLineSegment();
+                Handle_Geom_TrimmedCurve this_curv = Handle_Geom_TrimmedCurve::DownCast
+                    (line->handle());
+                Handle_Geom_Line this_line = Handle_Geom_Line::DownCast
+                    (this_curv->BasisCurve());
+                this_line->SetLin(adapt.Line());
+                this_curv->SetTrim(adapt.FirstParameter(), adapt.LastParameter());
+                PyErr_SetString(PyExc_DeprecationWarning,
+                    "For future usage 'Curve' will return 'Line' which is infinite "
+                    "instead of the limited 'LineSegment'.\n"
+                    "If you need a line segment then use this:\n"
+                    "Part.LineSegment(edge.Curve,edge.FirstParameter,edge.LastParameter)\n"
+                    "To suppress the warning set BaseApp/Preferences/Mod/Part/General/LineOld to false");
+                PyErr_Print();
+
+                return Py::Object(new LineSegmentPy(line),true); // LinePyOld
+            }
+            else {
+                GeomLine* line = new GeomLine();
+                Handle_Geom_Line this_curv = Handle_Geom_Line::DownCast
+                    (line->handle());
+                this_curv->SetLin(adapt.Line());
+                return Py::Object(new LinePy(line),true);
+            }
         }
     case GeomAbs_Circle:
         {
@@ -744,6 +774,21 @@ Py::Object TopoShapeEdgePy::getCurve() const
             GeomBSplineCurve* curve = new GeomBSplineCurve(adapt.BSpline());
             return Py::Object(new BSplineCurvePy(curve),true);
         }
+#if OCC_VERSION_HEX >= 0x070000
+    case GeomAbs_OffsetCurve:
+        {
+            Standard_Real first, last;
+            Handle_Geom_Curve c = BRep_Tool::Curve(e, first, last);
+            Handle_Geom_OffsetCurve off = Handle_Geom_OffsetCurve::DownCast(c);
+            if (!off.IsNull()) {
+                GeomOffsetCurve* curve = new GeomOffsetCurve(off);
+                return Py::Object(new OffsetCurvePy(curve),true);
+            }
+            else {
+                throw Py::RuntimeError("Failed to convert to offset curve");
+            }
+        }
+#endif
     case GeomAbs_OtherCurve:
         break;
     }
@@ -877,5 +922,5 @@ PyObject *TopoShapeEdgePy::getCustomAttributes(const char* /*attr*/) const
 
 int TopoShapeEdgePy::setCustomAttributes(const char* /*attr*/, PyObject* /*obj*/)
 {
-    return 0; 
+    return 0;
 }

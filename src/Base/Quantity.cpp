@@ -92,14 +92,40 @@ bool Quantity::operator >(const Quantity& that) const
     return (this->_Value > that._Value) ;
 }
 
+bool Quantity::operator <=(const Quantity& that) const
+{
+    if (this->_Unit != that._Unit)
+        throw Base::Exception("Quantity::operator <=(): quantities need to have same unit to compare");
+
+    return (this->_Value <= that._Value) ;
+}
+
+bool Quantity::operator >=(const Quantity& that) const
+{
+    if (this->_Unit != that._Unit)
+        throw Base::Exception("Quantity::operator >=(): quantities need to have same unit to compare");
+
+    return (this->_Value >= that._Value) ;
+}
+
 Quantity Quantity::operator *(const Quantity &p) const
 {
     return Quantity(this->_Value * p._Value,this->_Unit * p._Unit);
 }
 
+Quantity Quantity::operator *(double p) const
+{
+    return Quantity(this->_Value * p,this->_Unit);
+}
+
 Quantity Quantity::operator /(const Quantity &p) const
 {
     return Quantity(this->_Value / p._Value,this->_Unit / p._Unit);
+}
+
+Quantity Quantity::operator /(double p) const
+{
+    return Quantity(this->_Value / p,this->_Unit);
 }
 
 Quantity Quantity::pow(const Quantity &p) const
@@ -109,6 +135,13 @@ Quantity Quantity::pow(const Quantity &p) const
     return Quantity(
         std::pow(this->_Value, p._Value),
         this->_Unit.pow((short)p._Value)
+        );
+}
+
+Quantity Quantity::pow(double p) const
+{
+    return Quantity(
+        std::pow(this->_Value, p), this->_Unit
         );
 }
 
@@ -323,13 +356,25 @@ int QuantityLexer(void);
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 // Scanner, defined in QuantityParser.l
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wsign-compare"
+# pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#elif defined (__GNUC__)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wsign-compare"
+#endif
 #include "QuantityLexer.c"
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#elif defined (__GNUC__)
+# pragma GCC diagnostic pop
+#endif
 #endif // DOXYGEN_SHOULD_SKIP_THIS
 }
 
 Quantity Quantity::parse(const QString &string)
 {
-    
     // parse from buffer
     QuantityParser::YY_BUFFER_STATE my_string_buffer = QuantityParser::yy_scan_string (string.toUtf8().data());
     // set the global return variables
