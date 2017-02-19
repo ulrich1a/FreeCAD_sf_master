@@ -93,11 +93,14 @@ TaskFemConstraintContact::TaskFemConstraintContact(ViewProviderFemConstraintCont
     std::vector<App::DocumentObject*> Objects = pcConstraint->References.getValues();
     std::vector<std::string> SubElements = pcConstraint->References.getSubValues();
     double S = pcConstraint->Slope.getValue();
+    double T = pcConstraint->Tension.getValue();
     double F = pcConstraint->Friction.getValue();
 
     // Fill data into dialog elements
     ui->spSlope->setMinimum(1.0);
     ui->spSlope->setValue(S);
+    ui->spTension->setMinimum(0.001);
+    ui->spTension->setValue(T);
     ui->spFriction->setValue(F);
 
 /* */
@@ -424,6 +427,7 @@ const std::string TaskFemConstraintContact::getReferences() const
 
 /* Note: */
 double TaskFemConstraintContact::get_Slope() const{return ui->spSlope->value();}
+double TaskFemConstraintContact::get_Tension() const{return ui->spTension->value();}
 double TaskFemConstraintContact::get_Friction() const{return ui->spFriction->value();}
 
 
@@ -466,6 +470,8 @@ bool TaskDlgFemConstraintContact::accept()
     try {
         Gui::Command::doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.Slope = %f",
             name.c_str(), parameterContact->get_Slope());
+        Gui::Command::doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.Tension = %f",
+            name.c_str(), parameterContact->get_Tension());
         Gui::Command::doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.Friction = %f",
             name.c_str(), parameterContact->get_Friction());
         std::string scale = parameterContact->getScale();  //OvG: determine modified scale

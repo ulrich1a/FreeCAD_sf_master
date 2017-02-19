@@ -43,6 +43,7 @@ ConstraintContact::ConstraintContact()
 {
 /*Note: Initialise parameters here*/
     ADD_PROPERTY(Slope,(0.0));
+    ADD_PROPERTY(Tension,(0.0));
     ADD_PROPERTY(Friction,(0.0));
 /* */
 

@@ -52,6 +52,7 @@ public:
     ~TaskFemConstraintContact();
     const std::string getReferences() const;
     double get_Slope()const;
+    double get_Tension()const;
     double get_Friction()const;
 
 private Q_SLOTS:
