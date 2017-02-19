@@ -808,7 +808,8 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
             f.write('*SURFACE INTERACTION, NAME=INT' + str(obj) + '\n')
             f.write('*SURFACE BEHAVIOR,PRESSURE-OVERCLOSURE=LINEAR\n')
             slope = contact_obj.Slope
-            f.write(str(slope) + ' \n')
+            tension = contact_obj.Tension
+            f.write(str(slope) + ',' +str(tension) + ' \n')
             friction = contact_obj.Friction
             if friction > 0:
                 f.write('*FRICTION \n')

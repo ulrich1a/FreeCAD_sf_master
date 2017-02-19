@@ -49,7 +49,8 @@ public:
      * This is only the definitions of the variables
      ******/
     //ex.
-    App::PropertyFloat Slope;
+    App::PropertyFloat Slope; 
+    App::PropertyFloat Tension;
     App::PropertyFloat Friction;
 
     //etc
