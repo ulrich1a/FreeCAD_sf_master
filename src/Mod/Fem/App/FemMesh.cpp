@@ -1414,29 +1414,51 @@ void FemMesh::writeABAQUS(const std::string &Filename) const
             anABAQUS_Output << std::endl;
         }
     }
-
+    
     // now filtering out all double faces.
     genFaces.sort();
+        
     for (genIt = genFaces.begin(); genIt!=genFaces.end(); )
     {
       theFace = genIt;
       
       nextFace = ++genIt;
-      std::cout << "inside filter loop" << std::endl;
-      if (*theFace != *nextFace)
+      if (genIt!=genFaces.end())
+      {
+        std::cout << "inside filter loop" << std::endl;
+        if (*theFace != *nextFace)
+        {
+          surface.push_back( *theFace);
+          for ( VERT_LIST::iterator node = theFace->begin(); node!=theFace->end(); node++)
+            std::cout << *node << ", ";
+          std::cout << std::endl;
+        }
+        else
+        {
+          ++genIt;
+        }
+      }
+      else
       {
         surface.push_back( *theFace);
         for ( VERT_LIST::iterator node = theFace->begin(); node!=theFace->end(); node++)
           std::cout << *node << ", ";
         std::cout << std::endl;
       }
-      else
-      {
-        ++genIt;
-      }
     }  
     std::cout << std::endl;
     std::cout << "Found surface faces: " << surface.size() << std::endl;
+
+
+
+    //if (!elementsMap.empty()) {
+        //anABAQUS_Output.close();
+        //return; // done
+    //}
+
+    // the debug return
+    //anABAQUS_Output.close();
+    //return; // done
 
     
     // get faceFaces with searchable nodes list as map-index
@@ -1460,33 +1482,53 @@ void FemMesh::writeABAQUS(const std::string &Filename) const
     }
     std::cout << "Found face faces: " << facefaces.size() << std::endl;
 
-    // The comparison between the surface list of codes with the map facefaces
+
+    //if (true) {
+        //anABAQUS_Output.close();
+        //return; // done
+    //}
+
+
+
+
+    // The comparison between the surface list of nodes-lists with the map facefaces
   
     surIt = surface.begin();
     for (fpos = facefaces.begin(); fpos!=facefaces.end(); fpos++)
     {
         got_single_face = true;
-        cout << fpos->second  << "  fpos ";
+        std::cout << fpos->second  << "  fpos ";
         if ((fpos->first) == (*surIt))
         {
-          //cout << *surIt  << "  pos " ;
-          if (surIt!=surface.end()) surIt++;
           got_single_face = false;
+          if (surIt!=surface.end()) surIt++;
         }
-        cout << endl;
-        for ( ; surIt!=surface.end() ? ((fpos->first) > (*surIt)): false ; surIt++)
-        {
-          cout  << "  pos nonmatch " << endl;
+        std::cout << std::endl;
+        // need a while construct here
+        while ((surIt!=surface.end()) && ((fpos->first) > (*surIt))) 
+        {  
+          surIt++;
+          std::cout  << "  pos nonmatch " << std::endl;
         }
         if (got_single_face) singlefaces.push_back(fpos->second);
     }
 
+
+
+    //if (true) {
+        //anABAQUS_Output.close();
+        //return; // done
+    //}
+
+
+
+
     // add faces
     // now use only the faces not containing to a solid
-    cout << "Faces not containing to a solid: " << endl;
+    std::cout << "Faces not containing to a solid: " << std::endl;
     for (spos = singlefaces.begin(); spos!=singlefaces.end(); spos++)
     {
-        cout << *spos  << "  singleface " << endl;
+        std::cout << *spos  << "  singleface " << std::endl;
         const SMDS_MeshElement* aFace = myMesh->GetMeshDS()->FindElement(*spos);
         std::pair<int, std::vector<int> > apair;
         apair.first = aFace->GetID();
@@ -1501,11 +1543,11 @@ void FemMesh::writeABAQUS(const std::string &Filename) const
         }
        
     }
-    cout << endl;
+    std::cout << std::endl;
 
 
     for (ElementsMap::iterator it = elementsMap.begin(); it != elementsMap.end(); ++it) {
-        anABAQUS_Output << "*Element, TYPE=" << it->first << ", ELSET=Eall" << std::endl;
+        anABAQUS_Output << "*Element, TYPE=" << it->first << ", ELSET=EallF" << std::endl;
         for (NodesMap::iterator jt = it->second.begin(); jt != it->second.end(); ++jt) {
             anABAQUS_Output << jt->first;
             for (std::vector<int>::iterator kt = jt->second.begin(); kt != jt->second.end(); ++kt) {

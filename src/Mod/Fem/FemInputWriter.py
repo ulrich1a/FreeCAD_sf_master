@@ -71,6 +71,7 @@ class FemInputWriter():
             os.mkdir(self.dir_name)
         self.fc_ver = FreeCAD.Version()
         self.ccx_eall = 'Eall'
+        self.ccx_eall_shell = 'EallF'
         self.ccx_elsets = []
         self.femmesh = self.mesh_object.FemMesh
         self.femnodes_mesh = {}

@@ -431,8 +431,8 @@ class FemTools(QtCore.QRunnable, QtCore.QObject):
                         message += "More than one shell thickness has an empty references list (Only one empty references list is allowed!).\n"
                     has_no_references = True
             if self.mesh:
-                if self.mesh.FemMesh.VolumeCount > 0:
-                    message += "Shell thicknesses defined but FEM mesh has volume elements.\n"
+                #if self.mesh.FemMesh.VolumeCount > 0:
+                #    message += "Shell thicknesses defined but FEM mesh has volume elements.\n"
                 if self.mesh.FemMesh.FaceCount == 0:
                     message += "Shell thicknesses defined but FEM mesh has no shell elements.\n"
         if self.fluid_sections:

@@ -359,16 +359,17 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
                 self.get_ccx_elsets_single_mat_single_beam()
             elif self.beamsection_objects and len(self.beamsection_objects) > 1:         # single mat, multiple beams
                 self.get_ccx_elsets_single_mat_multiple_beam()
-            elif self.fluidsection_objects and len(self.fluidsection_objects) == 1:          # single mat, single fluid
+            if self.fluidsection_objects and len(self.fluidsection_objects) == 1:          # single mat, single fluid
                 self.get_ccx_elsets_single_mat_single_fluid()
             elif self.fluidsection_objects and len(self.fluidsection_objects) > 1:         # single mat, multiple fluids
                 self.get_ccx_elsets_single_mat_multiple_fluid()
-            elif self.shellthickness_objects and len(self.shellthickness_objects) == 1:  # single mat, single shell
+            if self.shellthickness_objects and len(self.shellthickness_objects) == 1:  # single mat, single shell
                 self.get_ccx_elsets_single_mat_single_shell()
             elif self.shellthickness_objects and len(self.shellthickness_objects) > 1:   # single mat, multiple shells
                 self.get_ccx_elsets_single_mat_multiple_shell()
-            else:                                                                        # single mat, solid
-                self.get_ccx_elsets_single_mat_solid()
+            #else:
+            # single mat, solid
+            self.get_ccx_elsets_single_mat_solid()
         else:
             if self.beamsection_objects and len(self.beamsection_objects) == 1:         # multiple mats, single beam
                 self.get_ccx_elsets_multiple_mat_single_beam()
@@ -378,12 +379,12 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
                 self.get_ccx_elsets_multiple_mat_single_fluid()
             elif self.fluidsection_objects and len(self.fluidsection_objects) > 1:        # multiple mats, multiple fluids
                 self.get_ccx_elsets_multiple_mat_multiple_fluid()
-            elif self.shellthickness_objects and len(self.shellthickness_objects) == 1:   # multiple mats, single shell
+            if self.shellthickness_objects and len(self.shellthickness_objects) == 1:   # multiple mats, single shell
                 self.get_ccx_elsets_multiple_mat_single_shell()
             elif self.shellthickness_objects and len(self.shellthickness_objects) > 1:  # multiple mats, multiple shells
                 self.get_ccx_elsets_multiple_mat_multiple_shell()
-            else:                                                                       # multiple mats, solid
-                self.get_ccx_elsets_multiple_mat_solid()
+            #else:                                                                       # multiple mats, solid
+            self.get_ccx_elsets_multiple_mat_solid()
         for ccx_elset in self.ccx_elsets:
             f.write('*ELSET,ELSET=' + ccx_elset['ccx_elset_name'] + '\n')
             collect_ele = False
@@ -396,6 +397,8 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
             if ccx_elset['ccx_elset']:
                 if ccx_elset['ccx_elset'] == self.ccx_eall:
                     f.write(self.ccx_eall + '\n')
+                elif ccx_elset['ccx_elset'] == self.ccx_eall_shell:
+                    f.write(self.ccx_eall_shell + '\n')
                 else:
                     elsetchanged = 0
                     counter = 0
@@ -638,7 +641,7 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
                         setion_def = '*BEAM GENERAL SECTION, ' + elsetdef + material + section_type + '\n'
                     f.write(setion_def)
                     f.write(setion_geo)
-                elif 'fluidsection_obj'in ccx_elset:  # fluid mesh
+                if 'fluidsection_obj'in ccx_elset:  # fluid mesh
                     fluidsec_obj = ccx_elset['fluidsection_obj']
                     elsetdef = 'ELSET=' + ccx_elset['ccx_elset_name'] + ', '
                     material = 'MATERIAL=' + ccx_elset['mat_obj_name']
@@ -654,7 +657,7 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
                         section_type = fluidsec_obj.ChannelSectionType
                     f.write(setion_def)
                     f.write(setion_geo)
-                elif 'shellthickness_obj'in ccx_elset:  # shell mesh
+                if 'shellthickness_obj'in ccx_elset:  # shell mesh
                     shellth_obj = ccx_elset['shellthickness_obj']
                     elsetdef = 'ELSET=' + ccx_elset['ccx_elset_name'] + ', '
                     material = 'MATERIAL=' + ccx_elset['mat_obj_name']
@@ -662,7 +665,7 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
                     setion_geo = str(shellth_obj.Thickness.getValueAs('mm')) + '\n'
                     f.write(setion_def)
                     f.write(setion_geo)
-                else:  # solid mesh
+                if ('solid' in ccx_elset): # solid mesh
                     elsetdef = 'ELSET=' + ccx_elset['ccx_elset_name'] + ', '
                     material = 'MATERIAL=' + ccx_elset['mat_obj_name']
                     setion_def = '*SOLID SECTION, ' + elsetdef + material + '\n'
@@ -1078,7 +1081,8 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
         shellth_obj = self.shellthickness_objects[0]['Object']
         ccx_elset = {}
         ccx_elset['shellthickness_obj'] = shellth_obj
-        ccx_elset['ccx_elset'] = self.ccx_eall
+        #ccx_elset['ccx_elset'] = self.ccx_eall
+        ccx_elset['ccx_elset'] = self.ccx_eall_shell
         ccx_elset['ccx_elset_name'] = get_ccx_elset_shell_name(mat_obj.Name, shellth_obj.Name)
         ccx_elset['mat_obj_name'] = mat_obj.Name
         ccx_elset['ccx_mat_name'] = mat_obj.Material['Name']
@@ -1091,6 +1095,7 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
         ccx_elset['ccx_elset_name'] = get_ccx_elset_solid_name(mat_obj.Name)
         ccx_elset['mat_obj_name'] = mat_obj.Name
         ccx_elset['ccx_mat_name'] = mat_obj.Material['Name']
+        ccx_elset['solid'] = 'solid section' # actually used as a flag.
         self.ccx_elsets.append(ccx_elset)
 
     def get_ccx_elsets_single_mat_multiple_beam(self):
@@ -1204,6 +1209,7 @@ class FemInputWriterCcx(FemInputWriter.FemInputWriter):
             ccx_elset['ccx_elset_name'] = get_ccx_elset_solid_name(mat_obj.Name, None, mat_data['ShortName'])
             ccx_elset['mat_obj_name'] = mat_obj.Name
             ccx_elset['ccx_mat_name'] = mat_obj.Material['Name']
+            ccx_elset['solid'] = 'solid section' # actually used as a flag.
             self.ccx_elsets.append(ccx_elset)
 
     def get_ccx_elsets_multiple_mat_multiple_beam(self):
